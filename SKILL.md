@@ -37,8 +37,8 @@ Validates a CLI tool's repo against the ANCC convention. Checks SKILL.md structu
     }
   ],
   "summary": {
-    "total": 10,
-    "pass": 9,
+    "total": 11,
+    "pass": 10,
     "fail": 0,
     "warn": 1
   }
@@ -61,6 +61,28 @@ Creates a template SKILL.md in the current directory with all required sections.
 **Exit codes:**
 - 0: SKILL.md created successfully
 - 1: SKILL.md already exists (without --force) or write error
+
+### ancc doctor
+
+Checks ancc's own health and reports companion tools.
+
+**Flags:**
+- `--format json` — output as JSON (default: human-readable)
+
+**JSON output:**
+```json
+{
+  "status": "ok | warn | error",
+  "checks": [
+    {"name": "go-version", "status": "ok", "message": "go 1.23 found"},
+    {"name": "github-api", "status": "ok", "message": "GitHub API reachable"}
+  ]
+}
+```
+
+**Exit codes:**
+- 0: all healthy
+- 1: critical issue found
 
 ### ancc version
 

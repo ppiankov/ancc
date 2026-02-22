@@ -4,7 +4,7 @@ Static validator for the Agent-Native CLI Convention. Checks whether a CLI tool'
 
 ## What this is
 
-A Go CLI that reads a repo (local path or GitHub URL) and validates it against the six ANCC requirements. Focuses on static validation — checking SKILL.md structure, repo contents, and release artifacts. Does not install or execute the target tool.
+A Go CLI that reads a repo (local path or GitHub URL) and validates it against the seven ANCC requirements. Focuses on static validation — checking SKILL.md structure, repo contents, and release artifacts. Does not install or execute the target tool.
 
 ## What this is NOT
 
@@ -45,6 +45,7 @@ internal/
 8. **skill-md-parsing** — has parsing examples
 9. **has-binary-release** — GitHub releases contain binary assets (GitHub repos only)
 10. **has-init-command** — SKILL.md documents an init command
+11. **has-doctor-command** — SKILL.md documents a doctor command
 
 ## Style reference
 
