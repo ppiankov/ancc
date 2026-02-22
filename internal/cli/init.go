@@ -16,7 +16,7 @@ func newInitCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// TODO: implement SKILL.md template generation (WO-004)
 			_, _ = name, force
-			fmt.Fprintln(cmd.OutOrStdout(), "init not yet implemented")
+			_, _ = fmt.Fprintln(cmd.OutOrStdout(), "init not yet implemented")
 			return nil
 		},
 	}
