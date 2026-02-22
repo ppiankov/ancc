@@ -159,7 +159,7 @@ type Summary struct {
 7. `skill-md-not-do` — has "What this does NOT do" section
 8. `skill-md-parsing` — has parsing examples section
 9. `has-init-command` — documents an init command
-10. `has-doctor-command` — documents a doctor command
+10. `has-doctor-command` — documents a doctor command (warn, not fail — recommended)
 11. `has-binary-release` — GitHub releases contain binaries (warn if not checkable)
 
 ### Acceptance criteria
