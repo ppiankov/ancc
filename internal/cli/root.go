@@ -6,9 +6,10 @@ import (
 
 func newRootCmd(version string) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:     "ancc",
-		Short:   "Static validator for the Agent-Native CLI Convention",
-		Version: version,
+		Use:           "ancc",
+		Short:         "Static validator for the Agent-Native CLI Convention",
+		Version:       version,
+		SilenceErrors: true,
 	}
 
 	cmd.AddCommand(newValidateCmd())
