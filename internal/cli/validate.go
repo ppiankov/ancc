@@ -3,6 +3,7 @@ package cli
 import (
 	"fmt"
 
+	"github.com/ppiankov/ancc/internal/validator"
 	"github.com/spf13/cobra"
 )
 
@@ -20,11 +21,32 @@ func newValidateCmd() *cobra.Command {
 				path = args[0]
 			}
 
-			// TODO: wire validator (WO-003, WO-004)
-			_, _ = format, verbose
-			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "validating %s (not yet implemented)\n", path)
+			result, err := validator.Validate(path)
+			if err != nil {
+				return fmt.Errorf("validation error: %w", err)
+			}
+
+			w := cmd.OutOrStdout()
+			switch format {
+			case "json":
+				if err := formatJSON(w, result); err != nil {
+					return fmt.Errorf("formatting output: %w", err)
+				}
+			default:
+				formatText(w, result, verbose)
+			}
+
+			switch result.Status {
+			case validator.OverallFail:
+				return &ExitError{Code: 1}
+			case validator.OverallPartial:
+				return &ExitError{Code: 2}
+			}
+
 			return nil
 		},
+		SilenceUsage:  true,
+		SilenceErrors: true,
 	}
 
 	cmd.Flags().StringVar(&format, "format", "text", "output format (text, json)")

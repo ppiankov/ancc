@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"os"
 
 	"github.com/ppiankov/ancc/internal/cli"
@@ -9,7 +10,15 @@ import (
 var version = "dev"
 
 func main() {
-	if err := cli.Execute(version); err != nil {
-		os.Exit(1)
+	err := cli.Execute(version)
+	if err == nil {
+		return
 	}
+
+	var exitErr *cli.ExitError
+	if errors.As(err, &exitErr) {
+		os.Exit(exitErr.Code)
+	}
+
+	os.Exit(1)
 }
