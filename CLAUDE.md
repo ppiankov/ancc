@@ -45,7 +45,7 @@ internal/
 8. **skill-md-parsing** — has parsing examples
 9. **has-binary-release** — GitHub releases contain binary assets (GitHub repos only)
 10. **has-init-command** — SKILL.md documents an init command
-11. **has-doctor-command** — SKILL.md documents a doctor command
+11. **has-doctor-command** — SKILL.md documents a doctor command (warn, not fail — recommended extension)
 
 ## Style reference
 
