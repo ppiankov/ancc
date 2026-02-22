@@ -22,7 +22,7 @@ func newValidateCmd() *cobra.Command {
 
 			// TODO: wire validator (WO-003, WO-004)
 			_, _ = format, verbose
-			fmt.Fprintf(cmd.OutOrStdout(), "validating %s (not yet implemented)\n", path)
+			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "validating %s (not yet implemented)\n", path)
 			return nil
 		},
 	}
