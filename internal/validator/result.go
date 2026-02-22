@@ -1,5 +1,19 @@
 package validator
 
+// Status values for individual checks.
+const (
+	StatusPass = "pass"
+	StatusFail = "fail"
+	StatusWarn = "warn"
+)
+
+// Overall validation status values.
+const (
+	OverallPass    = "pass"
+	OverallFail    = "fail"
+	OverallPartial = "partial"
+)
+
 // CheckResult holds the outcome of a single validation check.
 type CheckResult struct {
 	Name    string `json:"name"`
