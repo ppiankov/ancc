@@ -1,0 +1,198 @@
+package cli
+
+import (
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"os"
+	"os/exec"
+	"strings"
+
+	"github.com/spf13/cobra"
+)
+
+// DoctorCheck holds the result of a single health check.
+type DoctorCheck struct {
+	Name    string `json:"name"`
+	Status  string `json:"status"`
+	Message string `json:"message"`
+}
+
+// DoctorResult holds all health check results.
+type DoctorResult struct {
+	Status string        `json:"status"`
+	Checks []DoctorCheck `json:"checks"`
+}
+
+const (
+	doctorOK    = "ok"
+	doctorWarn  = "warn"
+	doctorError = "error"
+)
+
+// doctorEnv holds injectable dependencies for testing.
+type doctorEnv struct {
+	version   string
+	lookPath  func(string) (string, error)
+	httpGet   func(string) (*http.Response, error)
+	getenv    func(string) string
+	cmdOutput func(string, ...string) ([]byte, error)
+}
+
+func defaultDoctorEnv(version string) *doctorEnv {
+	return &doctorEnv{
+		version:  version,
+		lookPath: exec.LookPath,
+		httpGet:  http.Get,
+		getenv:   os.Getenv,
+		cmdOutput: func(name string, args ...string) ([]byte, error) {
+			return exec.Command(name, args...).Output()
+		},
+	}
+}
+
+func newDoctorCmd() *cobra.Command {
+	var format string
+
+	cmd := &cobra.Command{
+		Use:   "doctor",
+		Short: "Check ancc health and environment",
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			env := defaultDoctorEnv(cmd.Root().Version)
+			result := runDoctor(env)
+
+			w := cmd.OutOrStdout()
+			switch format {
+			case "json":
+				if err := formatDoctorJSON(w, result); err != nil {
+					return fmt.Errorf("formatting output: %w", err)
+				}
+			default:
+				formatDoctorText(w, result)
+			}
+
+			if result.Status == doctorError {
+				return &ExitError{Code: 1}
+			}
+			return nil
+		},
+		SilenceUsage:  true,
+		SilenceErrors: true,
+	}
+
+	cmd.Flags().StringVar(&format, "format", "text", "output format (text, json)")
+
+	return cmd
+}
+
+func runDoctor(env *doctorEnv) *DoctorResult {
+	result := &DoctorResult{}
+
+	result.Checks = append(result.Checks, checkVersion(env))
+	result.Checks = append(result.Checks, checkGo(env))
+	result.Checks = append(result.Checks, checkGitHubAPI(env))
+	result.Checks = append(result.Checks, checkHomebrew(env))
+
+	result.Status = doctorOK
+	for _, c := range result.Checks {
+		if c.Status == doctorError {
+			result.Status = doctorError
+			break
+		}
+		if c.Status == doctorWarn {
+			result.Status = doctorWarn
+		}
+	}
+
+	return result
+}
+
+func checkVersion(env *doctorEnv) DoctorCheck {
+	v := env.version
+	if v == "" {
+		v = "dev"
+	}
+	return DoctorCheck{Name: "ancc-version", Status: doctorOK, Message: v}
+}
+
+func checkGo(env *doctorEnv) DoctorCheck {
+	_, err := env.lookPath("go")
+	if err != nil {
+		return DoctorCheck{Name: "go-available", Status: doctorWarn, Message: "go not found in PATH"}
+	}
+
+	out, err := env.cmdOutput("go", "version")
+	if err != nil {
+		return DoctorCheck{Name: "go-available", Status: doctorWarn, Message: "go found but version check failed"}
+	}
+
+	version := strings.TrimSpace(string(out))
+	return DoctorCheck{Name: "go-available", Status: doctorOK, Message: version}
+}
+
+func checkGitHubAPI(env *doctorEnv) DoctorCheck {
+	token := env.getenv("GITHUB_TOKEN")
+	if token == "" {
+		return DoctorCheck{Name: "github-api", Status: doctorWarn, Message: "GITHUB_TOKEN not set"}
+	}
+
+	resp, err := env.httpGet("https://api.github.com")
+	if err != nil {
+		return DoctorCheck{Name: "github-api", Status: doctorError, Message: "GitHub API unreachable"}
+	}
+	_ = resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return DoctorCheck{Name: "github-api", Status: doctorError, Message: fmt.Sprintf("GitHub API returned %d", resp.StatusCode)}
+	}
+
+	return DoctorCheck{Name: "github-api", Status: doctorOK, Message: "GitHub API reachable"}
+}
+
+func checkHomebrew(env *doctorEnv) DoctorCheck {
+	_, err := env.lookPath("brew")
+	if err != nil {
+		return DoctorCheck{Name: "homebrew", Status: doctorWarn, Message: "brew not found in PATH"}
+	}
+	return DoctorCheck{Name: "homebrew", Status: doctorOK, Message: "brew found"}
+}
+
+const doctorLabelWidth = 35
+
+func formatDoctorText(w io.Writer, result *DoctorResult) {
+	for _, c := range result.Checks {
+		label := doctorCheckLabels[c.Name]
+		if label == "" {
+			label = c.Name
+		}
+
+		dots := doctorLabelWidth - len(label)
+		if dots < 3 {
+			dots = 3
+		}
+
+		status := strings.ToUpper(c.Status)
+		line := fmt.Sprintf("  %s %s %s", label, strings.Repeat(".", dots), status)
+		if c.Message != "" {
+			line += "  " + c.Message
+		}
+		_, _ = fmt.Fprintln(w, line)
+	}
+
+	_, _ = fmt.Fprintln(w)
+	_, _ = fmt.Fprintf(w, "  Result: %s\n", strings.ToUpper(result.Status))
+}
+
+func formatDoctorJSON(w io.Writer, result *DoctorResult) error {
+	enc := json.NewEncoder(w)
+	enc.SetIndent("", "  ")
+	return enc.Encode(result)
+}
+
+var doctorCheckLabels = map[string]string{
+	"ancc-version": "ancc version",
+	"go-available": "Go available",
+	"github-api":   "GitHub API",
+	"homebrew":     "Homebrew",
+}
