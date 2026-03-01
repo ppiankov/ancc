@@ -19,7 +19,7 @@ Static validator for the [Agent-Native CLI Convention](https://ancc.dev).
 | Self-validation test | Complete |
 | Homebrew distribution | Complete |
 | Skills command (agent config scanner) | Complete |
-| Init command (SKILL.md generator) | Next |
+| Init command (SKILL.md generator) | Complete |
 | Doctor command | Next |
 | Token counting (`skills --tokens`) | Planned |
 
