@@ -18,8 +18,10 @@ Static validator for the [Agent-Native CLI Convention](https://ancc.dev).
 | GitHub repo support | Complete |
 | Self-validation test | Complete |
 | Homebrew distribution | Complete |
-| Init command (SKILL.md generator) | Planned |
-| Doctor command | Planned |
+| Skills command (agent config scanner) | Complete |
+| Init command (SKILL.md generator) | Next |
+| Doctor command | Next |
+| Token counting (`skills --tokens`) | Planned |
 
 Pre-1.0: check names and JSON output structure may change between minor versions.
 
@@ -95,6 +97,7 @@ internal/
   cli/                   -- Cobra commands, output formatting
   validator/             -- check orchestration, results
   skillmd/               -- SKILL.md parser
+  skills/                -- agent config scanner
 ```
 
 ## Known limitations
