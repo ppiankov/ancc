@@ -6,6 +6,57 @@ import (
 	"path/filepath"
 )
 
+// fileBytes returns the size of a single file in bytes, or 0 on error.
+func fileBytes(path string) int64 {
+	info, err := os.Stat(path)
+	if err != nil {
+		return 0
+	}
+	return info.Size()
+}
+
+// dirBytes returns the total size of all regular files in a directory (non-recursive).
+func dirBytes(dir string) int64 {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return 0
+	}
+	var total int64
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		info, err := e.Info()
+		if err != nil {
+			continue
+		}
+		total += info.Size()
+	}
+	return total
+}
+
+// dirBytesRecursive returns the total size of all regular files under dir, recursively.
+func dirBytesRecursive(dir string) int64 {
+	var total int64
+	_ = filepath.WalkDir(dir, func(_ string, d os.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return nil
+		}
+		info, err := d.Info()
+		if err != nil {
+			return nil
+		}
+		total += info.Size()
+		return nil
+	})
+	return total
+}
+
+// bytesToTokens converts a byte count to an approximate token count (bytes / 4).
+func bytesToTokens(b int64) int64 {
+	return b / 4
+}
+
 // countSkillDirs counts subdirectories in a skills directory.
 func countSkillDirs(dir string) int {
 	entries, err := os.ReadDir(dir)
@@ -84,6 +135,7 @@ func parseMCPServers(path string) int {
 
 func scanClaudeCode(projectDir, homeDir string) AgentResult {
 	r := AgentResult{Name: AgentClaudeCode}
+	var bytes int64
 
 	if homeDir != "" {
 		globalSkillsDir := filepath.Join(homeDir, ".claude", "skills")
@@ -99,6 +151,10 @@ func scanClaudeCode(projectDir, homeDir string) AgentResult {
 		if r.Skills > 0 {
 			r.Sources = append(r.Sources, "~/.claude/skills/")
 		}
+
+		bytes += fileBytes(globalSettings)
+		bytes += dirBytesRecursive(globalSkillsDir)
+		bytes += fileBytes(filepath.Join(homeDir, ".claude", "CLAUDE.md"))
 	}
 
 	projectSkillsDir := filepath.Join(projectDir, ".claude", "skills")
@@ -113,6 +169,12 @@ func scanClaudeCode(projectDir, homeDir string) AgentResult {
 		r.Sources = append(r.Sources, ".claude/settings.local.json")
 	}
 
+	bytes += fileBytes(localSettings)
+	bytes += dirBytesRecursive(projectSkillsDir)
+	bytes += fileBytes(filepath.Join(projectDir, "CLAUDE.md"))
+	bytes += fileBytes(filepath.Join(projectDir, "CLAUDE.local.md"))
+
+	r.Tokens = bytesToTokens(bytes)
 	return r
 }
 
@@ -126,11 +188,13 @@ func scanCline(projectDir, _ string) AgentResult {
 		r.Sources = append(r.Sources, ".clinerules/")
 	}
 
+	r.Tokens = bytesToTokens(dirBytes(rulesDir))
 	return r
 }
 
 func scanCursor(projectDir, homeDir string) AgentResult {
 	r := AgentResult{Name: AgentCursor}
+	var bytes int64
 
 	rulesDir := filepath.Join(projectDir, ".cursor", "rules")
 	entries, err := os.ReadDir(rulesDir)
@@ -144,6 +208,7 @@ func scanCursor(projectDir, homeDir string) AgentResult {
 			r.Sources = append(r.Sources, ".cursor/rules/")
 		}
 	}
+	bytes += dirBytes(rulesDir)
 
 	if homeDir != "" {
 		mcpPath := filepath.Join(homeDir, ".cursor", "mcp.json")
@@ -152,8 +217,10 @@ func scanCursor(projectDir, homeDir string) AgentResult {
 			r.MCP += mcpCount
 			r.Sources = append(r.Sources, "~/.cursor/mcp.json")
 		}
+		bytes += fileBytes(mcpPath)
 	}
 
+	r.Tokens = bytesToTokens(bytes)
 	return r
 }
 
@@ -177,23 +244,27 @@ func scanOpenCode(_ string, homeDir string) AgentResult {
 		Instructions []json.RawMessage          `json:"instructions"`
 	}
 	if err := json.Unmarshal(data, &cfg); err != nil {
+		r.Tokens = bytesToTokens(fileBytes(cfgPath))
 		return r
 	}
 
 	r.Skills = len(cfg.Instructions)
 	r.MCP = len(cfg.MCP)
 
+	r.Tokens = bytesToTokens(fileBytes(cfgPath))
 	return r
 }
 
 func scanCodex(projectDir, _ string) AgentResult {
 	r := AgentResult{Name: AgentCodex, Advisory: true}
+	var bytes int64
 
 	agentsPath := filepath.Join(projectDir, "AGENTS.md")
 	if _, err := os.Stat(agentsPath); err == nil {
 		r.Skills++
 		r.Sources = append(r.Sources, "AGENTS.md (advisory)")
 	}
+	bytes += fileBytes(agentsPath)
 
 	codexDir := filepath.Join(projectDir, ".codex")
 	count := countFiles(codexDir)
@@ -201,7 +272,9 @@ func scanCodex(projectDir, _ string) AgentResult {
 		r.Skills += count
 		r.Sources = append(r.Sources, ".codex/")
 	}
+	bytes += dirBytes(codexDir)
 
+	r.Tokens = bytesToTokens(bytes)
 	return r
 }
 
@@ -219,5 +292,6 @@ func scanQwen(_ string, homeDir string) AgentResult {
 		r.Sources = append(r.Sources, "~/.qwen/settings.json (advisory)")
 	}
 
+	r.Tokens = bytesToTokens(fileBytes(cfgPath))
 	return r
 }

@@ -38,9 +38,13 @@ func ScanWithHome(projectDir, homeDir string) (*ScanResult, error) {
 
 	for _, scan := range scanners {
 		agent := scan(projectDir, homeDir)
-		if agent.Skills > 0 || agent.Hooks > 0 || agent.MCP > 0 {
+		if agent.Skills > 0 || agent.Hooks > 0 || agent.MCP > 0 || agent.Tokens > 0 {
 			result.Agents = append(result.Agents, agent)
 		}
+	}
+
+	for _, a := range result.Agents {
+		result.TotalTokens += a.Tokens
 	}
 
 	result.Product = findANCCProduct(projectDir)

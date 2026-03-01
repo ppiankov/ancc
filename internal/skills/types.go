@@ -16,6 +16,7 @@ type AgentResult struct {
 	Skills   int      `json:"skills"`
 	Hooks    int      `json:"hooks"`
 	MCP      int      `json:"mcp"`
+	Tokens   int64    `json:"tokens"`
 	Sources  []string `json:"sources"`
 	Advisory bool     `json:"advisory"`
 }
@@ -28,7 +29,8 @@ type ANCCProduct struct {
 
 // ScanResult holds the complete scan output.
 type ScanResult struct {
-	Path    string        `json:"path"`
-	Agents  []AgentResult `json:"agents"`
-	Product *ANCCProduct  `json:"product,omitempty"`
+	Path        string        `json:"path"`
+	Agents      []AgentResult `json:"agents"`
+	TotalTokens int64         `json:"total_tokens"`
+	Product     *ANCCProduct  `json:"product,omitempty"`
 }

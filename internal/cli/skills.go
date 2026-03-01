@@ -12,6 +12,7 @@ import (
 
 func newSkillsCmd() *cobra.Command {
 	var format string
+	var showTokens bool
 
 	cmd := &cobra.Command{
 		Use:   "skills [path]",
@@ -35,7 +36,7 @@ func newSkillsCmd() *cobra.Command {
 					return fmt.Errorf("formatting output: %w", err)
 				}
 			default:
-				formatSkillsText(w, result)
+				formatSkillsText(w, result, showTokens)
 			}
 
 			return nil
@@ -45,6 +46,7 @@ func newSkillsCmd() *cobra.Command {
 	}
 
 	cmd.Flags().StringVar(&format, "format", "text", "output format (text, json)")
+	cmd.Flags().BoolVar(&showTokens, "tokens", false, "show estimated token counts")
 
 	return cmd
 }
@@ -52,33 +54,61 @@ func newSkillsCmd() *cobra.Command {
 const (
 	skillsAgentWidth  = 14
 	skillsNumWidth    = 8
+	skillsTokenWidth  = 10
 	skillsSourceWidth = 50
 )
 
-func formatSkillsText(w io.Writer, result *skills.ScanResult) {
+func formatSkillsText(w io.Writer, result *skills.ScanResult, showTokens bool) {
 	if len(result.Agents) == 0 && result.Product == nil {
 		_, _ = fmt.Fprintln(w, "No agent configurations found.")
 		return
 	}
 
 	if len(result.Agents) > 0 {
-		_, _ = fmt.Fprintf(w, "  %-*s %-*s %-*s %-*s %s\n",
-			skillsAgentWidth, "Agent",
-			skillsNumWidth, "Skills",
-			skillsNumWidth, "Hooks",
-			skillsNumWidth, "MCP",
-			"Source",
-		)
+		if showTokens {
+			_, _ = fmt.Fprintf(w, "  %-*s %-*s %-*s %-*s %-*s %s\n",
+				skillsAgentWidth, "Agent",
+				skillsNumWidth, "Skills",
+				skillsNumWidth, "Hooks",
+				skillsNumWidth, "MCP",
+				skillsTokenWidth, "Tokens",
+				"Source",
+			)
+		} else {
+			_, _ = fmt.Fprintf(w, "  %-*s %-*s %-*s %-*s %s\n",
+				skillsAgentWidth, "Agent",
+				skillsNumWidth, "Skills",
+				skillsNumWidth, "Hooks",
+				skillsNumWidth, "MCP",
+				"Source",
+			)
+		}
 
 		for _, a := range result.Agents {
 			sources := strings.Join(a.Sources, ", ")
-			_, _ = fmt.Fprintf(w, "  %-*s %-*d %-*d %-*d %s\n",
-				skillsAgentWidth, a.Name,
-				skillsNumWidth, a.Skills,
-				skillsNumWidth, a.Hooks,
-				skillsNumWidth, a.MCP,
-				sources,
-			)
+			if showTokens {
+				_, _ = fmt.Fprintf(w, "  %-*s %-*d %-*d %-*d %-*s %s\n",
+					skillsAgentWidth, a.Name,
+					skillsNumWidth, a.Skills,
+					skillsNumWidth, a.Hooks,
+					skillsNumWidth, a.MCP,
+					skillsTokenWidth, formatTokenCount(a.Tokens),
+					sources,
+				)
+			} else {
+				_, _ = fmt.Fprintf(w, "  %-*s %-*d %-*d %-*d %s\n",
+					skillsAgentWidth, a.Name,
+					skillsNumWidth, a.Skills,
+					skillsNumWidth, a.Hooks,
+					skillsNumWidth, a.MCP,
+					sources,
+				)
+			}
+		}
+
+		if showTokens {
+			_, _ = fmt.Fprintln(w)
+			_, _ = fmt.Fprintf(w, "  Total context tax: %s\n", formatTokenCount(result.TotalTokens))
 		}
 	}
 
@@ -87,6 +117,26 @@ func formatSkillsText(w io.Writer, result *skills.ScanResult) {
 		_, _ = fmt.Fprintf(w, "  ANCC product: %s (name: %s)\n",
 			result.Product.Path, result.Product.Name)
 	}
+}
+
+// formatTokenCount returns a human-readable token count with ~ prefix and comma separators.
+func formatTokenCount(tokens int64) string {
+	if tokens == 0 {
+		return "~0"
+	}
+	s := fmt.Sprintf("%d", tokens)
+	n := len(s)
+	if n <= 3 {
+		return "~" + s
+	}
+	var buf []byte
+	for i, c := range s {
+		if i > 0 && (n-i)%3 == 0 {
+			buf = append(buf, ',')
+		}
+		buf = append(buf, byte(c))
+	}
+	return "~" + string(buf)
 }
 
 func formatSkillsJSON(w io.Writer, result *skills.ScanResult) error {

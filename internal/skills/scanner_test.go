@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 )
 
@@ -69,6 +70,78 @@ func TestCountFiles_WithFiles(t *testing.T) {
 
 	if got := countFiles(dir); got != 2 {
 		t.Errorf("got %d, want 2", got)
+	}
+}
+
+// --- fileBytes ---
+
+func TestFileBytes_Existing(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "test.txt")
+	writeTestFile(t, path, "hello world") // 11 bytes
+
+	if got := fileBytes(path); got != 11 {
+		t.Errorf("got %d, want 11", got)
+	}
+}
+
+func TestFileBytes_NonExistent(t *testing.T) {
+	if got := fileBytes("/nonexistent/file"); got != 0 {
+		t.Errorf("got %d, want 0", got)
+	}
+}
+
+// --- dirBytes ---
+
+func TestDirBytes_WithFiles(t *testing.T) {
+	dir := t.TempDir()
+	writeTestFile(t, filepath.Join(dir, "a.txt"), "aaaa")   // 4 bytes
+	writeTestFile(t, filepath.Join(dir, "b.txt"), "bbbbbb") // 6 bytes
+	mkdirAll(t, filepath.Join(dir, "subdir"))               // skipped
+
+	if got := dirBytes(dir); got != 10 {
+		t.Errorf("got %d, want 10", got)
+	}
+}
+
+func TestDirBytes_NonExistent(t *testing.T) {
+	if got := dirBytes("/nonexistent"); got != 0 {
+		t.Errorf("got %d, want 0", got)
+	}
+}
+
+// --- dirBytesRecursive ---
+
+func TestDirBytesRecursive_Nested(t *testing.T) {
+	dir := t.TempDir()
+	writeTestFile(t, filepath.Join(dir, "a.txt"), "aaaa")          // 4
+	writeTestFile(t, filepath.Join(dir, "sub", "b.txt"), "bbbbbb") // 6
+
+	if got := dirBytesRecursive(dir); got != 10 {
+		t.Errorf("got %d, want 10", got)
+	}
+}
+
+func TestDirBytesRecursive_NonExistent(t *testing.T) {
+	if got := dirBytesRecursive("/nonexistent"); got != 0 {
+		t.Errorf("got %d, want 0", got)
+	}
+}
+
+// --- bytesToTokens ---
+
+func TestBytesToTokens(t *testing.T) {
+	tests := []struct{ bytes, want int64 }{
+		{0, 0},
+		{3, 0},
+		{4, 1},
+		{100, 25},
+		{13600, 3400},
+	}
+	for _, tt := range tests {
+		if got := bytesToTokens(tt.bytes); got != tt.want {
+			t.Errorf("bytesToTokens(%d) = %d, want %d", tt.bytes, got, tt.want)
+		}
 	}
 }
 
@@ -447,5 +520,122 @@ func TestFindANCCProduct_NotFound(t *testing.T) {
 	product := findANCCProduct(t.TempDir())
 	if product != nil {
 		t.Error("expected nil product")
+	}
+}
+
+// --- Token counting in scanners ---
+
+func TestScanClaudeCode_Tokens(t *testing.T) {
+	home := t.TempDir()
+	proj := t.TempDir()
+
+	// Global settings (small file).
+	writeTestFile(t, filepath.Join(home, ".claude", "settings.json"), "{}")
+	// Global skill with content.
+	content := strings.Repeat("x", 400) // 400 bytes = 100 tokens
+	writeTestFile(t, filepath.Join(home, ".claude", "skills", "s1", "prompt.md"), content)
+	// Project CLAUDE.md.
+	writeTestFile(t, filepath.Join(proj, "CLAUDE.md"), strings.Repeat("y", 200))
+
+	r := scanClaudeCode(proj, home)
+	// 2 (settings.json) + 400 (skill file) + 200 (CLAUDE.md) = 602 bytes / 4 = 150
+	if r.Tokens != 150 {
+		t.Errorf("tokens = %d, want 150", r.Tokens)
+	}
+}
+
+func TestScanCline_Tokens(t *testing.T) {
+	proj := t.TempDir()
+	writeTestFile(t, filepath.Join(proj, ".clinerules", "rule.md"), strings.Repeat("a", 80))
+
+	r := scanCline(proj, "")
+	if r.Tokens != 20 { // 80 / 4
+		t.Errorf("tokens = %d, want 20", r.Tokens)
+	}
+}
+
+func TestScanCursor_Tokens(t *testing.T) {
+	proj := t.TempDir()
+	home := t.TempDir()
+	writeTestFile(t, filepath.Join(proj, ".cursor", "rules", "a.mdc"), strings.Repeat("r", 40))
+	writeTestFile(t, filepath.Join(home, ".cursor", "mcp.json"), `{"mcpServers":{"s":{}}}`)
+
+	r := scanCursor(proj, home)
+	expected := bytesToTokens(40 + int64(len(`{"mcpServers":{"s":{}}}`)))
+	if r.Tokens != expected {
+		t.Errorf("tokens = %d, want %d", r.Tokens, expected)
+	}
+}
+
+func TestScanCodex_Tokens(t *testing.T) {
+	proj := t.TempDir()
+	writeTestFile(t, filepath.Join(proj, "AGENTS.md"), strings.Repeat("a", 120))
+
+	r := scanCodex(proj, "")
+	if r.Tokens != 30 { // 120 / 4
+		t.Errorf("tokens = %d, want 30", r.Tokens)
+	}
+}
+
+func TestScanWithHome_TotalTokens(t *testing.T) {
+	home := t.TempDir()
+	proj := t.TempDir()
+
+	// Claude config with known size.
+	writeTestFile(t, filepath.Join(proj, "CLAUDE.md"), strings.Repeat("x", 400))
+	// Cline config.
+	writeTestFile(t, filepath.Join(proj, ".clinerules", "rule.md"), strings.Repeat("y", 200))
+
+	result, err := ScanWithHome(proj, home)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.TotalTokens == 0 {
+		t.Error("expected non-zero TotalTokens")
+	}
+
+	// Verify individual agents have tokens.
+	var claudeTokens, clineTokens int64
+	for _, a := range result.Agents {
+		switch a.Name {
+		case AgentClaudeCode:
+			claudeTokens = a.Tokens
+		case AgentCline:
+			clineTokens = a.Tokens
+		}
+	}
+	if claudeTokens != 100 { // 400 / 4
+		t.Errorf("claude tokens = %d, want 100", claudeTokens)
+	}
+	if clineTokens != 50 { // 200 / 4
+		t.Errorf("cline tokens = %d, want 50", clineTokens)
+	}
+	if result.TotalTokens != claudeTokens+clineTokens {
+		t.Errorf("total = %d, want %d", result.TotalTokens, claudeTokens+clineTokens)
+	}
+}
+
+func TestScanWithHome_TokensOnlyAgent(t *testing.T) {
+	// A project with only CLAUDE.md and no skills/hooks/MCP should still appear
+	// because it has tokens > 0.
+	proj := t.TempDir()
+	writeTestFile(t, filepath.Join(proj, "CLAUDE.md"), strings.Repeat("x", 400))
+
+	result, err := ScanWithHome(proj, t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var found bool
+	for _, a := range result.Agents {
+		if a.Name == AgentClaudeCode {
+			found = true
+			if a.Tokens == 0 {
+				t.Error("expected non-zero tokens for claude-code")
+			}
+		}
+	}
+	if !found {
+		t.Error("expected claude-code agent in results (has tokens from CLAUDE.md)")
 	}
 }
