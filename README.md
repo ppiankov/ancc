@@ -21,7 +21,7 @@ Static validator for the [Agent-Native CLI Convention](https://ancc.dev).
 | Skills command (agent config scanner) | Complete |
 | Init command (SKILL.md generator) | Complete |
 | Doctor command | Complete |
-| Token counting (`skills --tokens`) | Planned |
+| Token counting (`skills --tokens`) | Complete |
 
 Pre-1.0: check names and JSON output structure may change between minor versions.
 
