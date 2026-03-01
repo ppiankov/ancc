@@ -8,7 +8,7 @@ Static validator for the [Agent-Native CLI Convention](https://ancc.dev).
 
 ## Project Status
 
-**Status: Beta** · **v0.1.0** · Pre-1.0
+**Status: Beta** · **v0.2.0** · Pre-1.0
 
 | Milestone | Status |
 |-----------|--------|
