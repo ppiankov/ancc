@@ -14,6 +14,7 @@ func newRootCmd(version string) *cobra.Command {
 
 	cmd.AddCommand(newValidateCmd())
 	cmd.AddCommand(newInitCmd())
+	cmd.AddCommand(newSkillsCmd())
 
 	return cmd
 }
