@@ -55,17 +55,32 @@ func (c *gitHubClient) doRequest(url string) (*http.Response, error) {
 	return c.httpClient.Do(req)
 }
 
+// gitHubSkillMDPaths lists the Content API paths to try for SKILL.md.
+var gitHubSkillMDPaths = []string{"SKILL.md", "docs/SKILL.md"}
+
 // FetchSkillMD fetches SKILL.md content from a GitHub repo.
+// Checks the repo root first, then docs/.
 func (c *gitHubClient) FetchSkillMD(owner, repo string) (string, error) {
-	url := fmt.Sprintf("%s/repos/%s/%s/contents/SKILL.md", c.baseURL, owner, repo)
+	for _, path := range gitHubSkillMDPaths {
+		content, err := c.fetchFileContent(owner, repo, path)
+		if err == nil {
+			return content, nil
+		}
+	}
+	return "", fmt.Errorf("SKILL.md not found in %s/%s", owner, repo)
+}
+
+// fetchFileContent fetches a single file's content via the GitHub Contents API.
+func (c *gitHubClient) fetchFileContent(owner, repo, path string) (string, error) {
+	url := fmt.Sprintf("%s/repos/%s/%s/contents/%s", c.baseURL, owner, repo, path)
 	resp, err := c.doRequest(url)
 	if err != nil {
-		return "", fmt.Errorf("fetching SKILL.md: %w", err)
+		return "", fmt.Errorf("fetching %s: %w", path, err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode == http.StatusNotFound {
-		return "", fmt.Errorf("SKILL.md not found in %s/%s", owner, repo)
+		return "", fmt.Errorf("%s not found", path)
 	}
 	if resp.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("GitHub API error: %s", resp.Status)
@@ -80,19 +95,19 @@ func (c *gitHubClient) FetchSkillMD(owner, repo string) (string, error) {
 	}
 
 	if content.DownloadURL == "" {
-		return "", fmt.Errorf("no download URL for SKILL.md")
+		return "", fmt.Errorf("no download URL for %s", path)
 	}
 
 	// Fetch the raw file.
 	rawResp, err := c.doRequest(content.DownloadURL)
 	if err != nil {
-		return "", fmt.Errorf("downloading SKILL.md: %w", err)
+		return "", fmt.Errorf("downloading %s: %w", path, err)
 	}
 	defer func() { _ = rawResp.Body.Close() }()
 
 	body, err := io.ReadAll(rawResp.Body)
 	if err != nil {
-		return "", fmt.Errorf("reading SKILL.md: %w", err)
+		return "", fmt.Errorf("reading %s: %w", path, err)
 	}
 
 	return string(body), nil

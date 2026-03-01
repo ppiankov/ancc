@@ -1,6 +1,7 @@
 package validator
 
 import (
+	"os"
 	"path/filepath"
 	"runtime"
 	"testing"
@@ -29,6 +30,21 @@ func TestCheckSkillMDExists_Present(t *testing.T) {
 	_, file, _, _ := runtime.Caller(0)
 	repoRoot := filepath.Join(filepath.Dir(file), "..", "..")
 	r := checkSkillMDExists(repoRoot)
+	if r.Status != StatusPass {
+		t.Errorf("status = %q, want %q", r.Status, StatusPass)
+	}
+}
+
+func TestCheckSkillMDExists_DocsSubdir(t *testing.T) {
+	dir := t.TempDir()
+	docsDir := filepath.Join(dir, "docs")
+	if err := os.MkdirAll(docsDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := writeFile(filepath.Join(docsDir, "SKILL.md"), []byte("# test")); err != nil {
+		t.Fatal(err)
+	}
+	r := checkSkillMDExists(dir)
 	if r.Status != StatusPass {
 		t.Errorf("status = %q, want %q", r.Status, StatusPass)
 	}
@@ -280,6 +296,33 @@ func TestValidate_MissingSections(t *testing.T) {
 	}
 	if result.Summary.Fail == 0 {
 		t.Error("expected at least one failure")
+	}
+}
+
+func TestValidate_DocsSubdir(t *testing.T) {
+	dir := t.TempDir()
+	docsDir := filepath.Join(dir, "docs")
+	if err := os.MkdirAll(docsDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	data, err := readFile(testdataPath("valid-skill.md"))
+	if err != nil {
+		t.Fatalf("failed to read fixture: %v", err)
+	}
+	if err := writeFile(filepath.Join(docsDir, "SKILL.md"), data); err != nil {
+		t.Fatalf("failed to write docs/SKILL.md: %v", err)
+	}
+
+	result, err := Validate(dir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result.Summary.Total != 11 {
+		t.Errorf("total = %d, want 11", result.Summary.Total)
+	}
+	if result.Summary.Fail != 0 {
+		t.Errorf("fail = %d, want 0", result.Summary.Fail)
 	}
 }
 

@@ -21,6 +21,9 @@ func Validate(path string) (*ValidationResult, error) {
 
 	result := &ValidationResult{Path: path}
 
+	// Locate SKILL.md (root or docs/).
+	skillPath := findSkillMD(path)
+
 	// Check 1: SKILL.md exists (filesystem check).
 	existsResult := checkSkillMDExists(path)
 	result.Checks = append(result.Checks, existsResult)
@@ -43,8 +46,8 @@ func Validate(path string) (*ValidationResult, error) {
 		return result, nil
 	}
 
-	// Parse SKILL.md.
-	sf, err := skillmd.ParseFile(filepath.Join(path, "SKILL.md"))
+	// Parse SKILL.md from the discovered location.
+	sf, err := skillmd.ParseFile(skillPath)
 	if err != nil {
 		return nil, fmt.Errorf("parsing SKILL.md: %w", err)
 	}

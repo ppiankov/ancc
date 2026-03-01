@@ -36,13 +36,27 @@ func warn(name, msg string) CheckResult {
 	return CheckResult{Name: name, Status: StatusWarn, Message: msg}
 }
 
-// checkSkillMDExists verifies SKILL.md exists at the repo root.
-func checkSkillMDExists(path string) CheckResult {
-	p := filepath.Join(path, "SKILL.md")
-	if _, err := os.Stat(p); err != nil {
-		return fail(CheckSkillMDExists, "SKILL.md not found at repo root")
+// skillMDPaths lists the locations where SKILL.md may be found, in priority order.
+var skillMDPaths = []string{"SKILL.md", filepath.Join("docs", "SKILL.md")}
+
+// findSkillMD returns the full path to SKILL.md within the repo, checking
+// the root first and then docs/. Returns an empty string if not found.
+func findSkillMD(repoPath string) string {
+	for _, rel := range skillMDPaths {
+		p := filepath.Join(repoPath, rel)
+		if _, err := os.Stat(p); err == nil {
+			return p
+		}
 	}
-	return pass(CheckSkillMDExists, "SKILL.md found at repo root")
+	return ""
+}
+
+// checkSkillMDExists verifies SKILL.md exists at the repo root or docs/.
+func checkSkillMDExists(path string) CheckResult {
+	if found := findSkillMD(path); found != "" {
+		return pass(CheckSkillMDExists, "SKILL.md found")
+	}
+	return fail(CheckSkillMDExists, "SKILL.md not found")
 }
 
 // checkInstall verifies the Install section exists.

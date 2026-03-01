@@ -52,7 +52,7 @@ go install github.com/ppiankov/ancc/cmd/ancc@latest
 
 ancc is itself ANCC-compliant. Single binary, deterministic output, structured JSON, bounded jobs.
 
-Agents: read [`SKILL.md`](SKILL.md) for install, commands, JSON parsing patterns, and exit codes.
+Agents: read [`docs/SKILL.md`](docs/SKILL.md) for install, commands, JSON parsing patterns, and exit codes.
 
 Key pattern for agents: `ancc validate . --format json` returns machine-parseable validation results.
 

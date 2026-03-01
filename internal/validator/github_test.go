@@ -89,6 +89,40 @@ func TestFetchSkillMD_Success(t *testing.T) {
 	}
 }
 
+func TestFetchSkillMD_DocsSubdir(t *testing.T) {
+	skillContent := "# mytool\n\nA tool in docs/.\n"
+
+	var srvURL string
+	mux := http.NewServeMux()
+	// Root SKILL.md returns 404.
+	mux.HandleFunc("/repos/owner/repo/contents/SKILL.md", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	})
+	// docs/SKILL.md exists.
+	mux.HandleFunc("/repos/owner/repo/contents/docs/SKILL.md", func(w http.ResponseWriter, _ *http.Request) {
+		resp := map[string]string{"download_url": srvURL + "/raw/docs/SKILL.md"}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(resp)
+	})
+	mux.HandleFunc("/raw/docs/SKILL.md", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(skillContent))
+	})
+
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+	srvURL = srv.URL
+
+	client := &gitHubClient{baseURL: srv.URL, httpClient: srv.Client()}
+
+	content, err := client.FetchSkillMD("owner", "repo")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if content != skillContent {
+		t.Errorf("content = %q, want %q", content, skillContent)
+	}
+}
+
 func TestFetchSkillMD_NotFound(t *testing.T) {
 	srv, client := newTestServer(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
