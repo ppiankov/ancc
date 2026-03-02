@@ -16,6 +16,7 @@ func fileBytes(path string) int64 {
 }
 
 // dirBytes returns the total size of all regular files in a directory (non-recursive).
+// Uses os.Stat to follow symlinks and get the target file size.
 func dirBytes(dir string) int64 {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
@@ -23,11 +24,8 @@ func dirBytes(dir string) int64 {
 	}
 	var total int64
 	for _, e := range entries {
-		if e.IsDir() {
-			continue
-		}
-		info, err := e.Info()
-		if err != nil {
+		info, err := os.Stat(filepath.Join(dir, e.Name()))
+		if err != nil || info.IsDir() {
 			continue
 		}
 		total += info.Size()
@@ -36,19 +34,32 @@ func dirBytes(dir string) int64 {
 }
 
 // dirBytesRecursive returns the total size of all regular files under dir, recursively.
+// Follows symlinks so that symlinked directories and files are included.
 func dirBytesRecursive(dir string) int64 {
+	return dirBytesRecursiveDepth(dir, 10)
+}
+
+func dirBytesRecursiveDepth(dir string, maxDepth int) int64 {
+	if maxDepth <= 0 {
+		return 0
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return 0
+	}
 	var total int64
-	_ = filepath.WalkDir(dir, func(_ string, d os.DirEntry, err error) error {
-		if err != nil || d.IsDir() {
-			return nil
-		}
-		info, err := d.Info()
+	for _, e := range entries {
+		path := filepath.Join(dir, e.Name())
+		info, err := os.Stat(path)
 		if err != nil {
-			return nil
+			continue
 		}
-		total += info.Size()
-		return nil
-	})
+		if info.IsDir() {
+			total += dirBytesRecursiveDepth(path, maxDepth-1)
+		} else {
+			total += info.Size()
+		}
+	}
 	return total
 }
 
@@ -58,6 +69,7 @@ func bytesToTokens(b int64) int64 {
 }
 
 // countSkillDirs counts subdirectories in a skills directory.
+// Follows symlinks so that symlinked skill directories are counted.
 func countSkillDirs(dir string) int {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
@@ -67,6 +79,13 @@ func countSkillDirs(dir string) int {
 	for _, e := range entries {
 		if e.IsDir() {
 			count++
+			continue
+		}
+		if e.Type()&os.ModeSymlink != 0 {
+			info, err := os.Stat(filepath.Join(dir, e.Name()))
+			if err == nil && info.IsDir() {
+				count++
+			}
 		}
 	}
 	return count
@@ -178,17 +197,29 @@ func scanClaudeCode(projectDir, homeDir string) AgentResult {
 	return r
 }
 
-func scanCline(projectDir, _ string) AgentResult {
+func scanCline(projectDir, homeDir string) AgentResult {
 	r := AgentResult{Name: AgentCline}
+	var bytes int64
+
+	if homeDir != "" {
+		homeSkillsDir := filepath.Join(homeDir, ".cline", "skills")
+		homeCount := countSkillDirs(homeSkillsDir)
+		r.Skills += homeCount
+		if homeCount > 0 {
+			r.Sources = append(r.Sources, "~/.cline/skills/")
+		}
+		bytes += dirBytesRecursive(homeSkillsDir)
+	}
 
 	rulesDir := filepath.Join(projectDir, ".clinerules")
 	count := countFiles(rulesDir)
 	if count > 0 {
-		r.Skills = count
+		r.Skills += count
 		r.Sources = append(r.Sources, ".clinerules/")
 	}
+	bytes += dirBytes(rulesDir)
 
-	r.Tokens = bytesToTokens(dirBytes(rulesDir))
+	r.Tokens = bytesToTokens(bytes)
 	return r
 }
 
@@ -280,10 +311,19 @@ func scanCodex(projectDir, _ string) AgentResult {
 
 func scanQwen(_ string, homeDir string) AgentResult {
 	r := AgentResult{Name: AgentQwen, Advisory: true}
+	var bytes int64
 
 	if homeDir == "" {
 		return r
 	}
+
+	homeSkillsDir := filepath.Join(homeDir, ".qwen", "skills")
+	homeCount := countSkillDirs(homeSkillsDir)
+	r.Skills += homeCount
+	if homeCount > 0 {
+		r.Sources = append(r.Sources, "~/.qwen/skills/ (advisory)")
+	}
+	bytes += dirBytesRecursive(homeSkillsDir)
 
 	cfgPath := filepath.Join(homeDir, ".qwen", "settings.json")
 	mcpCount := parseMCPServers(cfgPath)
@@ -291,7 +331,8 @@ func scanQwen(_ string, homeDir string) AgentResult {
 		r.MCP = mcpCount
 		r.Sources = append(r.Sources, "~/.qwen/settings.json (advisory)")
 	}
+	bytes += fileBytes(cfgPath)
 
-	r.Tokens = bytesToTokens(fileBytes(cfgPath))
+	r.Tokens = bytesToTokens(bytes)
 	return r
 }

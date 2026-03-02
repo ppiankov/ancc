@@ -54,6 +54,23 @@ func TestCountSkillDirs_NonExistent(t *testing.T) {
 	}
 }
 
+func TestCountSkillDirs_Symlinks(t *testing.T) {
+	dir := t.TempDir()
+	target := t.TempDir()
+	mkdirAll(t, filepath.Join(target, "real-skill"))
+
+	// Create symlink from dir/linked-skill -> target/real-skill
+	if err := os.Symlink(filepath.Join(target, "real-skill"), filepath.Join(dir, "linked-skill")); err != nil {
+		t.Skip("symlinks not supported:", err)
+	}
+	// Also a real dir.
+	mkdirAll(t, filepath.Join(dir, "real-dir"))
+
+	if got := countSkillDirs(dir); got != 2 {
+		t.Errorf("got %d, want 2 (1 real dir + 1 symlinked dir)", got)
+	}
+}
+
 // --- countFiles ---
 
 func TestCountFiles_Empty(t *testing.T) {
@@ -125,6 +142,21 @@ func TestDirBytesRecursive_Nested(t *testing.T) {
 func TestDirBytesRecursive_NonExistent(t *testing.T) {
 	if got := dirBytesRecursive("/nonexistent"); got != 0 {
 		t.Errorf("got %d, want 0", got)
+	}
+}
+
+func TestDirBytesRecursive_Symlinks(t *testing.T) {
+	dir := t.TempDir()
+	target := t.TempDir()
+	writeTestFile(t, filepath.Join(target, "skill-dir", "prompt.md"), strings.Repeat("x", 100))
+
+	// Symlink dir/linked -> target/skill-dir
+	if err := os.Symlink(filepath.Join(target, "skill-dir"), filepath.Join(dir, "linked")); err != nil {
+		t.Skip("symlinks not supported:", err)
+	}
+
+	if got := dirBytesRecursive(dir); got != 100 {
+		t.Errorf("got %d, want 100", got)
 	}
 }
 
@@ -308,6 +340,48 @@ func TestScanCline_WithRules(t *testing.T) {
 	}
 }
 
+func TestScanCline_HomeSkills(t *testing.T) {
+	home := t.TempDir()
+	proj := t.TempDir()
+
+	mkdirAll(t, filepath.Join(home, ".cline", "skills", "commit"))
+	mkdirAll(t, filepath.Join(home, ".cline", "skills", "review"))
+
+	r := scanCline(proj, home)
+	if r.Skills != 2 {
+		t.Errorf("skills = %d, want 2", r.Skills)
+	}
+}
+
+func TestScanCline_HomeSymlinkedSkills(t *testing.T) {
+	home := t.TempDir()
+	proj := t.TempDir()
+	target := t.TempDir()
+
+	mkdirAll(t, filepath.Join(target, "commit"))
+	if err := os.Symlink(filepath.Join(target, "commit"), filepath.Join(home, ".cline", "skills", "commit")); err != nil {
+		t.Skip("symlinks not supported:", err)
+	}
+
+	r := scanCline(proj, home)
+	if r.Skills != 1 {
+		t.Errorf("skills = %d, want 1 (symlinked)", r.Skills)
+	}
+}
+
+func TestScanCline_HomeAndProject(t *testing.T) {
+	home := t.TempDir()
+	proj := t.TempDir()
+
+	mkdirAll(t, filepath.Join(home, ".cline", "skills", "commit"))
+	writeTestFile(t, filepath.Join(proj, ".clinerules", "rule.md"), "rule")
+
+	r := scanCline(proj, home)
+	if r.Skills != 2 { // 1 home skill + 1 project rule
+		t.Errorf("skills = %d, want 2", r.Skills)
+	}
+}
+
 // --- scanCursor ---
 
 func TestScanCursor_NoConfig(t *testing.T) {
@@ -417,6 +491,37 @@ func TestScanQwen_WithMCP(t *testing.T) {
 	writeTestFile(t, filepath.Join(home, ".qwen", "settings.json"), string(data))
 
 	r := scanQwen("", home)
+	if r.MCP != 1 {
+		t.Errorf("mcp = %d, want 1", r.MCP)
+	}
+}
+
+func TestScanQwen_HomeSkills(t *testing.T) {
+	home := t.TempDir()
+	mkdirAll(t, filepath.Join(home, ".qwen", "skills", "commit"))
+	mkdirAll(t, filepath.Join(home, ".qwen", "skills", "review"))
+
+	r := scanQwen("", home)
+	if r.Skills != 2 {
+		t.Errorf("skills = %d, want 2", r.Skills)
+	}
+}
+
+func TestScanQwen_HomeSkillsAndMCP(t *testing.T) {
+	home := t.TempDir()
+	mkdirAll(t, filepath.Join(home, ".qwen", "skills", "commit"))
+	cfg := map[string]interface{}{
+		"mcpServers": map[string]interface{}{
+			"srv": map[string]interface{}{"command": "srv"},
+		},
+	}
+	data, _ := json.Marshal(cfg)
+	writeTestFile(t, filepath.Join(home, ".qwen", "settings.json"), string(data))
+
+	r := scanQwen("", home)
+	if r.Skills != 1 {
+		t.Errorf("skills = %d, want 1", r.Skills)
+	}
 	if r.MCP != 1 {
 		t.Errorf("mcp = %d, want 1", r.MCP)
 	}
