@@ -23,6 +23,7 @@ Validates a CLI tool's repo against the ANCC convention. Checks SKILL.md structu
 **Flags:**
 - `--format json` — output as JSON (default: human-readable)
 - `--verbose` — show all checks including passing ones (default: failures and warnings only)
+- `--badge` — include shields.io badge URL in output
 
 **JSON output:**
 ```json
@@ -41,8 +42,12 @@ Validates a CLI tool's repo against the ANCC convention. Checks SKILL.md structu
     "pass": 14,
     "fail": 0,
     "warn": 1
-  }
+  },
+  "badge_url": "https://img.shields.io/badge/ANCC-pass-brightgreen"
 }
+```
+
+Note: `badge_url` field is only present when `--badge` is set.
 ```
 
 **Exit codes:**
@@ -64,7 +69,7 @@ Creates a template SKILL.md in the current directory with all required sections.
 
 ### ancc skills
 
-Scans for agent configurations in a directory. Detects Claude Code, Cline, Cursor, OpenCode, Codex, Qwen, and OpenClaw setups.
+Scans for agent configurations in a directory. Detects 11 agents: Claude Code, Cline, Cursor, OpenCode, Codex, Qwen, OpenClaw, Windsurf, Aider, Continue, and Copilot.
 
 **Flags:**
 - `--format json` — output as JSON (default: human-readable)
@@ -245,6 +250,70 @@ Batch validates all repos in a directory. Walks the directory tree, finds git re
 - 1: one or more repos fail
 - 2: warnings only across all repos
 
+### ancc context
+
+Shows per-agent token budget breakdown. Displays how much of each agent's context window is consumed by configuration.
+
+**Flags:**
+- `--format json` — output as JSON (default: human-readable)
+- `--agent <name>` — show only this agent
+- `--window <tokens>` — override default context window size
+
+**JSON output:**
+```json
+{
+  "agents": [
+    {
+      "name": "claude-code",
+      "config_tokens": 15569,
+      "context_window": 165000,
+      "available_tokens": 149431,
+      "config_percent": 9.4,
+      "skills": 26,
+      "hooks": 8,
+      "mcp": 0
+    }
+  ]
+}
+```
+
+**Exit codes:**
+- 0: completed
+
+### ancc diff
+
+Compares agent configurations between two directories. Shows structural differences in skills, hooks, MCP counts, and sources.
+
+**Flags:**
+- `--format json` — output as JSON (default: human-readable)
+- `--agent <name>` — compare only this agent
+- `--tokens` — show token counts
+
+**JSON output:**
+```json
+{
+  "path_a": "/path/to/project-a",
+  "path_b": "/path/to/project-b",
+  "agents": [
+    {
+      "name": "claude-code",
+      "status": "changed",
+      "skills": {"a": 3, "b": 5},
+      "hooks": {"a": 1, "b": 1},
+      "mcp": {"a": 0, "b": 1},
+      "tokens": {"a": 450, "b": 780},
+      "sources_added": [".claude/skills/"],
+      "sources_common": ["CLAUDE.md"]
+    }
+  ],
+  "summary": {"total": 3, "added": 1, "removed": 0, "changed": 1, "identical": 1}
+}
+```
+
+**Exit codes:**
+- 0: configurations are identical
+- 1: differences found
+
 ### ancc version
 
 Prints the version of ancc.
@@ -302,6 +371,21 @@ ancc scan ~/dev/ --depth 1
 # Get per-agent budget percentages
 ancc skills --budget 200000 --format json | jq '.agents[] | {name, tokens, budget_pct}'
 
+# Get badge URL for a repo
+ancc validate . --badge --format json | jq '.badge_url'
+
+# Compare agent configs between two projects
+ancc diff /path/to/project-a /path/to/project-b --format json | jq '.summary'
+
+# List changed agents between directories
+ancc diff . ../other --format json | jq '.agents[] | select(.status == "changed") | .name'
+
+# Show per-agent context window usage
+ancc context --format json | jq '.agents[] | {name, config_percent}'
+
+# Filter context for a single agent
+ancc context --agent claude-code --format json
+
 # Check doctor status
 ancc doctor --format json | jq '.status'
 ```
@@ -317,5 +401,9 @@ ancc doctor --format json | jq '.status'
 | codex | `~/.codex/AGENTS.md`, `~/.codex/skills/`, `~/.codex/config.toml`, `AGENTS.md`, `.codex/` | Yes |
 | qwen | `~/.qwen/skills/`, `~/.qwen/settings.json` | Yes |
 | openclaw | `~/.openclaw/skills/`, `~/.openclaw/openclaw.json`, `~/.openclaw/config/mcporter.json` | Yes |
+| windsurf | `.windsurfrules`, `.windsurf/rules/`, `~/.windsurf/rules/`, `~/.codeium/windsurf/mcp_config.json` | No |
+| aider | `.aider.conf.yml`, `~/.aider.conf.yml` | Yes |
+| continue | `~/.continue/config.yaml`, `~/.continue/config.json`, `.continuerc.json` | Yes |
+| copilot | `.github/copilot-instructions.md` | No |
 
 Advisory agents are detected but not considered primary — their config paths are labeled accordingly in output.

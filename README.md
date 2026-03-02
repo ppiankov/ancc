@@ -8,20 +8,21 @@ Static validator for the [Agent-Native CLI Convention](https://ancc.dev).
 
 ## Project Status
 
-**Status: Beta** · **v0.2.0** · Pre-1.0
+**Status: Beta** · **v0.5.0** · Pre-1.0
 
 | Milestone | Status |
 |-----------|--------|
-| SKILL.md parser | Complete |
-| Validation checks (11 checks) | Complete |
+| SKILL.md parser + validation (15 checks) | Complete |
 | CLI with human + JSON output | Complete |
-| GitHub repo support | Complete |
-| Self-validation test | Complete |
+| GitHub repo support + batch scan | Complete |
 | Homebrew distribution | Complete |
-| Skills command (agent config scanner) | Complete |
-| Init command (SKILL.md generator) | Complete |
-| Doctor command | Complete |
-| Token counting (`skills --tokens`) | Complete |
+| Skills scanner (11 agents) | Complete |
+| Init, doctor commands | Complete |
+| Token counting + budget visualization | Complete |
+| Audit (hooks, MCP, skills, environment) | Complete |
+| Context window budget overview | Complete |
+| Config diff between directories | Complete |
+| CI integration (GitHub Action + badge) | Complete |
 
 Pre-1.0: check names and JSON output structure may change between minor versions.
 
@@ -62,19 +63,27 @@ Key pattern for agents: `ancc validate . --format json` returns machine-parseabl
 
 ```
 ancc validate .
-ancc validate /path/to/repo
 ancc validate --format json .
-ancc validate --verbose .
+ancc validate --badge .
 
 ancc init
 ancc init --name mytool --force
 
 ancc skills .
 ancc skills --tokens .
-ancc skills --format json .
+ancc skills --budget 128000 .
 
+ancc audit
+ancc audit --agent claude-code
+
+ancc context .
+ancc context --agent claude-code --tokens
+
+ancc diff /path/to/project-a /path/to/project-b
+ancc diff . ../other-project --tokens
+
+ancc scan ~/dev/
 ancc doctor
-ancc doctor --format json
 ```
 
 ## Checks
@@ -92,6 +101,10 @@ ancc doctor --format json
 | `has-init-command` | Init command documented | fail |
 | `has-doctor-command` | Doctor command documented | warn |
 | `has-binary-release` | Binary release assets | warn |
+| `json-examples-valid` | JSON examples parse correctly | warn |
+| `exit-codes-numeric` | Exit codes are numeric | warn |
+| `commands-not-placeholder` | Commands are not placeholder names | warn |
+| `install-has-command` | Install section contains a command | warn |
 
 ## Exit codes
 
@@ -110,13 +123,24 @@ internal/
   skills/                -- agent config scanner
 ```
 
-## Roadmap
+## Supported Agents
 
-- **`ancc context`** — unified token budget overview. Show per-agent config overhead as a percentage of context window. One command, full visibility.
-- **Token budget warnings in audit** — warn when config tokens exceed 10% of context window, flag individual skills over 2,000 tokens.
-- **More agents** — Windsurf, Aider, Continue, Copilot Workspace. Same scanner pattern, one at a time.
-- **`ancc diff`** — compare agent configs between two directories. Show what's different, what's missing, what's changed.
-- **CI integration** — GitHub Action (`ppiankov/ancc-action`) to validate on PRs. Badge generation via `--badge` flag.
+ancc detects 11 agents: claude-code, cline, cursor, opencode, codex, qwen, openclaw, windsurf, aider, continue, copilot.
+
+See [`docs/SKILL.md`](docs/SKILL.md) for full config paths per agent.
+
+## CI Integration
+
+Use the bundled GitHub Action to validate on PRs:
+
+```yaml
+- uses: ppiankov/ancc@main
+  with:
+    checks: validate
+    fail-on-warn: false
+```
+
+Or generate a badge: `ancc validate . --badge`
 
 ## Known limitations
 
