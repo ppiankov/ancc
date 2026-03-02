@@ -3,6 +3,7 @@ package skills
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -27,6 +28,7 @@ type AuditEntry struct {
 	Status   AuditStatus `json:"status"`
 	Message  string      `json:"message"`
 	Path     string      `json:"path,omitempty"`
+	Data     interface{} `json:"data,omitempty"`
 }
 
 // AgentAudit is the audit result for one agent.
@@ -48,6 +50,7 @@ type AuditResult struct {
 	Path        string       `json:"path"`
 	Agents      []AgentAudit `json:"agents"`
 	Environment []AuditEntry `json:"environment,omitempty"`
+	Budget      []AuditEntry `json:"budget,omitempty"`
 	Summary     AuditSummary `json:"summary"`
 }
 
@@ -121,6 +124,11 @@ func AuditWithHome(projectDir, homeDir string, env *auditEnv) (*AuditResult, err
 
 	result.Environment = auditEnvironment(env)
 
+	scanResult, _ := ScanWithHome(projectDir, homeDir)
+	if scanResult != nil {
+		result.Budget = auditBudget(scanResult, homeDir, projectDir)
+	}
+
 	for _, agent := range result.Agents {
 		for _, e := range agent.Entries {
 			result.Summary.Total++
@@ -135,6 +143,17 @@ func AuditWithHome(projectDir, homeDir string, env *auditEnv) (*AuditResult, err
 		}
 	}
 	for _, e := range result.Environment {
+		result.Summary.Total++
+		switch e.Status {
+		case AuditOK:
+			result.Summary.OK++
+		case AuditWarn:
+			result.Summary.Warn++
+		case AuditError:
+			result.Summary.Errors++
+		}
+	}
+	for _, e := range result.Budget {
 		result.Summary.Total++
 		switch e.Status {
 		case AuditOK:
@@ -623,4 +642,122 @@ func auditOpenClaw(_ string, homeDir string, env *auditEnv) AgentAudit {
 	}
 
 	return a
+}
+
+// --- Budget audit ---
+
+const (
+	budgetWarnPct     = 10.0
+	budgetCriticalPct = 20.0
+	largeSkillTokens  = 2000
+	emptySkillTokens  = 50
+)
+
+// auditBudget checks per-agent token budget thresholds.
+func auditBudget(scanResult *ScanResult, homeDir, projectDir string) []AuditEntry {
+	var entries []AuditEntry
+	for _, a := range scanResult.Agents {
+		window := ContextWindow(a.Name)
+		pct := math.Round(float64(a.Tokens)/float64(window)*1000) / 10
+
+		if pct >= budgetCriticalPct {
+			entries = append(entries, AuditEntry{
+				Category: "budget",
+				Name:     "config-budget-critical",
+				Status:   AuditWarn,
+				Message:  fmt.Sprintf("%s: %s tokens (%.1f%% of ~%sK window)", a.Name, formatBudgetTokens(a.Tokens), pct, formatK(window)),
+				Data: map[string]interface{}{
+					"agent":   a.Name,
+					"tokens":  a.Tokens,
+					"window":  window,
+					"percent": pct,
+				},
+			})
+		} else if pct >= budgetWarnPct {
+			entries = append(entries, AuditEntry{
+				Category: "budget",
+				Name:     "config-budget-warning",
+				Status:   AuditWarn,
+				Message:  fmt.Sprintf("%s: %s tokens (%.1f%% of ~%sK window)", a.Name, formatBudgetTokens(a.Tokens), pct, formatK(window)),
+				Data: map[string]interface{}{
+					"agent":   a.Name,
+					"tokens":  a.Tokens,
+					"window":  window,
+					"percent": pct,
+				},
+			})
+		}
+
+		// Per-source checks.
+		var large []string
+		var empty []string
+		for _, src := range a.Sources {
+			tokens := sourceTokens(expandSourcePath(src, homeDir, projectDir))
+			if tokens > largeSkillTokens {
+				large = append(large, fmt.Sprintf("%s: %s", src, formatBudgetTokens(tokens)))
+			} else if tokens > 0 && tokens < emptySkillTokens {
+				empty = append(empty, src)
+			}
+		}
+
+		if len(large) > 0 {
+			entries = append(entries, AuditEntry{
+				Category: "budget",
+				Name:     "large-skill-warning",
+				Status:   AuditWarn,
+				Message:  fmt.Sprintf("%s: %d sources over %d tokens (%s)", a.Name, len(large), largeSkillTokens, strings.Join(large, ", ")),
+			})
+		}
+		if len(empty) > 0 {
+			entries = append(entries, AuditEntry{
+				Category: "budget",
+				Name:     "empty-token-skills",
+				Status:   AuditWarn,
+				Message:  fmt.Sprintf("%s: %d sources under %d tokens (%s)", a.Name, len(empty), emptySkillTokens, strings.Join(empty, ", ")),
+			})
+		}
+	}
+	return entries
+}
+
+// expandSourcePath converts a display-label source path to a filesystem path.
+func expandSourcePath(source, homeDir, projectDir string) string {
+	if strings.HasPrefix(source, "~/") {
+		return filepath.Join(homeDir, source[2:])
+	}
+	return filepath.Join(projectDir, source)
+}
+
+// sourceTokens computes the token count for a source path (file or directory).
+func sourceTokens(path string) int64 {
+	info, err := os.Stat(path)
+	if err != nil {
+		return 0
+	}
+	if info.IsDir() {
+		return bytesToTokens(dirBytesRecursive(path))
+	}
+	return bytesToTokens(info.Size())
+}
+
+// formatBudgetTokens formats a token count with comma separators.
+func formatBudgetTokens(tokens int64) string {
+	s := fmt.Sprintf("%d", tokens)
+	n := len(s)
+	if n <= 3 {
+		return s
+	}
+	var buf []byte
+	for i, c := range s {
+		if i > 0 && (n-i)%3 == 0 {
+			buf = append(buf, ',')
+		}
+		buf = append(buf, byte(c))
+	}
+	return string(buf)
+}
+
+// formatK formats a token count as "NNK" (e.g., 165000 → "165").
+func formatK(tokens int64) string {
+	return fmt.Sprintf("%d", tokens/1000)
 }

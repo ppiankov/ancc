@@ -31,6 +31,7 @@ func newAuditCmd() *cobra.Command {
 			if agentFilter != "" {
 				result = filterAuditAgent(result, agentFilter)
 				result.Environment = nil // skip environment checks for single-agent filter
+				result.Budget = nil      // skip budget checks for single-agent filter
 			}
 
 			w := cmd.OutOrStdout()
@@ -119,6 +120,7 @@ func formatAuditText(w io.Writer, result *skills.AuditResult) {
 	}
 
 	envWarns := formatEnvironmentSection(w, result)
+	formatBudgetSection(w, result)
 
 	_, _ = fmt.Fprintln(w)
 	issues := result.Summary.Errors + result.Summary.Warn
@@ -166,6 +168,21 @@ func formatEnvironmentSection(w io.Writer, result *skills.AuditResult) int {
 		}
 	}
 	return envWarns
+}
+
+func formatBudgetSection(w io.Writer, result *skills.AuditResult) {
+	if len(result.Budget) == 0 {
+		return
+	}
+
+	if len(result.Agents) > 0 || len(result.Environment) > 0 {
+		_, _ = fmt.Fprintln(w)
+	}
+	_, _ = fmt.Fprintln(w, "  budget")
+	for _, e := range result.Budget {
+		status := auditStatusIcons[e.Status]
+		_, _ = fmt.Fprintf(w, "    [%s] %s: %s\n", status, e.Name, e.Message)
+	}
 }
 
 func groupByCategory(entries []skills.AuditEntry) map[string][]skills.AuditEntry {

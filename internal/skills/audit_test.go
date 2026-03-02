@@ -505,6 +505,177 @@ func TestAuditWithHome_EmptyDir(t *testing.T) {
 	}
 }
 
+// --- auditBudget ---
+
+func TestAuditBudget_Warning(t *testing.T) {
+	// 11% of 128K = 14,080 tokens → should trigger config-budget-warning.
+	result := &ScanResult{
+		Agents: []AgentResult{
+			{Name: AgentCline, Tokens: 14_080, Sources: []string{".clinerules/"}},
+		},
+	}
+	entries := auditBudget(result, "/mock/home", "/mock/proj")
+	var found bool
+	for _, e := range entries {
+		if e.Name == "config-budget-warning" && e.Status == AuditWarn {
+			found = true
+			data := e.Data.(map[string]interface{})
+			if data["agent"] != AgentCline {
+				t.Errorf("data.agent = %v, want %q", data["agent"], AgentCline)
+			}
+		}
+	}
+	if !found {
+		t.Error("expected config-budget-warning entry")
+	}
+}
+
+func TestAuditBudget_Critical(t *testing.T) {
+	// 21% of 128K = 26,880 tokens → should trigger config-budget-critical.
+	result := &ScanResult{
+		Agents: []AgentResult{
+			{Name: AgentCline, Tokens: 26_880, Sources: []string{".clinerules/"}},
+		},
+	}
+	entries := auditBudget(result, "/mock/home", "/mock/proj")
+	var found bool
+	for _, e := range entries {
+		if e.Name == "config-budget-critical" && e.Status == AuditWarn {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("expected config-budget-critical entry")
+	}
+}
+
+func TestAuditBudget_Under10Percent(t *testing.T) {
+	// 5% of 128K = 6,400 tokens → no budget entries.
+	result := &ScanResult{
+		Agents: []AgentResult{
+			{Name: AgentCline, Tokens: 6_400, Sources: []string{".clinerules/"}},
+		},
+	}
+	entries := auditBudget(result, "/mock/home", "/mock/proj")
+	for _, e := range entries {
+		if e.Name == "config-budget-warning" || e.Name == "config-budget-critical" {
+			t.Errorf("unexpected budget entry: %s", e.Name)
+		}
+	}
+}
+
+func TestAuditBudget_LargeSkill(t *testing.T) {
+	dir := t.TempDir()
+	// Create a large file at .clinerules/big.md.
+	rulesDir := filepath.Join(dir, ".clinerules")
+	mkdirAll(t, rulesDir)
+	content := make([]byte, 12000) // 12000 bytes = 3000 tokens > 2000 threshold
+	writeTestFile(t, filepath.Join(rulesDir, "big.md"), string(content))
+
+	result := &ScanResult{
+		Agents: []AgentResult{
+			{Name: AgentCline, Tokens: 3000, Sources: []string{".clinerules/"}},
+		},
+	}
+	entries := auditBudget(result, "/mock/home", dir)
+	var found bool
+	for _, e := range entries {
+		if e.Name == "large-skill-warning" {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("expected large-skill-warning entry")
+	}
+}
+
+func TestAuditBudget_EmptySkill(t *testing.T) {
+	dir := t.TempDir()
+	// Create a tiny file at .clinerules/stub.md.
+	rulesDir := filepath.Join(dir, ".clinerules")
+	mkdirAll(t, rulesDir)
+	writeTestFile(t, filepath.Join(rulesDir, "stub.md"), "hi") // 2 bytes = 0 tokens
+
+	result := &ScanResult{
+		Agents: []AgentResult{
+			{Name: AgentCline, Tokens: 1, Sources: []string{".clinerules/"}},
+		},
+	}
+	entries := auditBudget(result, "/mock/home", dir)
+	// 2 bytes / 4 = 0 tokens — sourceTokens returns 0, which is not > 0 so empty check skips.
+	// Need at least 1 token (4 bytes) but under 50.
+	for _, e := range entries {
+		if e.Name == "empty-token-skills" {
+			t.Error("should not flag 0-token source as empty (0 is not > 0)")
+		}
+	}
+}
+
+func TestAuditBudget_EmptySkill_SmallFile(t *testing.T) {
+	dir := t.TempDir()
+	// Create a small file: 40 bytes = 10 tokens (>0, <50).
+	rulesDir := filepath.Join(dir, ".clinerules")
+	mkdirAll(t, rulesDir)
+	content := make([]byte, 40)
+	writeTestFile(t, filepath.Join(rulesDir, "stub.md"), string(content))
+
+	result := &ScanResult{
+		Agents: []AgentResult{
+			{Name: AgentCline, Tokens: 10, Sources: []string{".clinerules/"}},
+		},
+	}
+	entries := auditBudget(result, "/mock/home", dir)
+	var found bool
+	for _, e := range entries {
+		if e.Name == "empty-token-skills" {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("expected empty-token-skills entry for 10-token source")
+	}
+}
+
+func TestExpandSourcePath(t *testing.T) {
+	got := expandSourcePath("~/.claude/skills/", "/home/user", "/proj")
+	want := filepath.Join("/home/user", ".claude", "skills")
+	if got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+	got = expandSourcePath(".clinerules/", "/home/user", "/proj")
+	want = filepath.Join("/proj", ".clinerules/")
+	if got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+func TestFormatBudgetTokens(t *testing.T) {
+	tests := []struct {
+		input int64
+		want  string
+	}{
+		{0, "0"},
+		{100, "100"},
+		{1000, "1,000"},
+		{18230, "18,230"},
+		{165000, "165,000"},
+	}
+	for _, tt := range tests {
+		if got := formatBudgetTokens(tt.input); got != tt.want {
+			t.Errorf("formatBudgetTokens(%d) = %q, want %q", tt.input, got, tt.want)
+		}
+	}
+}
+
+func TestFormatK(t *testing.T) {
+	if got := formatK(165000); got != "165" {
+		t.Errorf("formatK(165000) = %q, want %q", got, "165")
+	}
+	if got := formatK(128000); got != "128" {
+		t.Errorf("formatK(128000) = %q, want %q", got, "128")
+	}
+}
+
 func TestAuditWithHome_SummaryCount(t *testing.T) {
 	home := t.TempDir()
 	proj := t.TempDir()
