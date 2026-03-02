@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 )
@@ -55,6 +56,8 @@ type auditEnv struct {
 	lookPath func(string) (string, error)
 	homeDir  string
 	readDir  func(string) ([]os.DirEntry, error)
+	stat     func(string) (os.FileInfo, error)
+	goos     string
 }
 
 func defaultAuditEnv(homeDir string) *auditEnv {
@@ -62,6 +65,8 @@ func defaultAuditEnv(homeDir string) *auditEnv {
 		lookPath: exec.LookPath,
 		homeDir:  homeDir,
 		readDir:  os.ReadDir,
+		stat:     os.Stat,
+		goos:     runtime.GOOS,
 	}
 }
 

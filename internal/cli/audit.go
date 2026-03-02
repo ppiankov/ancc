@@ -132,9 +132,10 @@ func formatAuditText(w io.Writer, result *skills.AuditResult) {
 	if envWarns > 0 {
 		_, _ = fmt.Fprintln(w)
 		_, _ = fmt.Fprintln(w, "  Recommendations:")
-		_, _ = fmt.Fprintln(w, "    - Revoke Full Disk Access for your terminal app (System Settings > Privacy & Security)")
+		_, _ = fmt.Fprintln(w, "    - Restrict terminal app access to personal directories (OS privacy settings)")
 		_, _ = fmt.Fprintln(w, "    - Use a sandboxed terminal profile for AI agent sessions")
 		_, _ = fmt.Fprintln(w, "    - Restrict agent file access with tool-level permissions (hooks, allowlists)")
+		_, _ = fmt.Fprintln(w, "    - Review and clean shell history files before agent sessions")
 	}
 }
 
@@ -150,7 +151,7 @@ func formatEnvironmentSection(w io.Writer, result *skills.AuditResult) int {
 
 	categories := groupByCategory(result.Environment)
 	envWarns := 0
-	for _, cat := range []string{"sensitive-dir", "credential-dir"} {
+	for _, cat := range []string{"sensitive-dir", "credential-dir", "history-file", "credential-file"} {
 		entries, ok := categories[cat]
 		if !ok {
 			continue

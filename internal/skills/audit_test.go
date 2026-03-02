@@ -22,13 +22,24 @@ func mockLookPath(found ...string) func(string) (string, error) {
 	}
 }
 
-// noopReadDir always returns not-exist, preventing environment checks from producing entries.
+// noopReadDir always returns not-exist, preventing directory checks from producing warnings.
 func noopReadDir(_ string) ([]os.DirEntry, error) {
 	return nil, os.ErrNotExist
 }
 
+// noopStat always returns not-exist, preventing file checks from producing warnings.
+func noopStat(_ string) (os.FileInfo, error) {
+	return nil, os.ErrNotExist
+}
+
 func testAuditEnv(found ...string) *auditEnv {
-	return &auditEnv{lookPath: mockLookPath(found...), homeDir: "/mock/home", readDir: noopReadDir}
+	return &auditEnv{
+		lookPath: mockLookPath(found...),
+		homeDir:  "/mock/home",
+		readDir:  noopReadDir,
+		stat:     noopStat,
+		goos:     "darwin",
+	}
 }
 
 // --- expandTilde ---
@@ -482,15 +493,15 @@ func TestAuditWithHome_EmptyDir(t *testing.T) {
 	if len(result.Agents) != 0 {
 		t.Errorf("agents = %d, want 0", len(result.Agents))
 	}
-	// Environment checks produce 10 entries (all "not present" = ok).
-	if len(result.Environment) != 10 {
-		t.Errorf("environment = %d, want 10", len(result.Environment))
+	// Environment checks: 7 sensitive + 7 credential + 5 history + 6 credential-file = 25 (darwin).
+	if len(result.Environment) != 25 {
+		t.Errorf("environment = %d, want 25", len(result.Environment))
 	}
-	if result.Summary.Total != 10 {
-		t.Errorf("total = %d, want 10", result.Summary.Total)
+	if result.Summary.Total != 25 {
+		t.Errorf("total = %d, want 25", result.Summary.Total)
 	}
-	if result.Summary.OK != 10 {
-		t.Errorf("ok = %d, want 10", result.Summary.OK)
+	if result.Summary.OK != 25 {
+		t.Errorf("ok = %d, want 25", result.Summary.OK)
 	}
 }
 
@@ -521,9 +532,9 @@ func TestAuditWithHome_SummaryCount(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// 1 hook ok + 10 environment ok = 11 ok.
-	if result.Summary.OK != 11 {
-		t.Errorf("ok = %d, want 11", result.Summary.OK)
+	// 1 hook ok + 25 environment ok = 26 ok.
+	if result.Summary.OK != 26 {
+		t.Errorf("ok = %d, want 26", result.Summary.OK)
 	}
 	if result.Summary.Errors != 1 {
 		t.Errorf("errors = %d, want 1", result.Summary.Errors)

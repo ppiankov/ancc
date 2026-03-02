@@ -107,7 +107,11 @@ Deep inspection of agent configurations. Goes beyond counting to verify that hoo
 - **Hooks** — does each hook command/script exist? Resolves `~/` paths and PATH lookups
 - **MCP servers** — does each server command binary exist in PATH or at its specified path?
 - **Skills** — is each skill directory non-empty? Reports file count per skill
-- **Environment** — probes sensitive directories (~/Documents, ~/Downloads, etc.) and credential directories (~/.ssh, ~/.aws, ~/.gnupg) for accessibility. Reports `ok` if blocked by TCC/permissions or not present, `warn` if accessible. Skipped when `--agent` filter is active.
+- **Environment** — probes sensitive directories, credential directories, shell history files, and credential files for accessibility. Platform-aware (macOS gets Movies+Library, Linux/Windows get Videos). Reports `ok` if blocked or not present, `warn` if accessible. Skipped when `--agent` filter is active.
+  - Sensitive dirs: ~/Documents, ~/Downloads, ~/Desktop, ~/Pictures, ~/Music, + platform-specific
+  - Credential dirs: ~/.ssh, ~/.aws, ~/.gnupg, ~/.docker, ~/.kube, ~/.azure, ~/.gcloud
+  - History files: ~/.bash_history, ~/.zsh_history, ~/.sh_history, ~/.python_history, ~/.node_repl_history
+  - Credential files: ~/.netrc, ~/.git-credentials, ~/.npmrc, ~/.pypirc, ~/.gem/credentials, ~/.cargo/credentials.toml
 
 **JSON output:**
 ```json
@@ -145,9 +149,21 @@ Deep inspection of agent configurations. Goes beyond counting to verify that hoo
       "name": "~/.ssh",
       "status": "warn",
       "message": "accessible (contains credentials, agents can read)"
+    },
+    {
+      "category": "history-file",
+      "name": "~/.zsh_history",
+      "status": "warn",
+      "message": "accessible (may contain accidentally typed secrets)"
+    },
+    {
+      "category": "credential-file",
+      "name": "~/.npmrc",
+      "status": "ok",
+      "message": "not present"
     }
   ],
-  "summary": {"total": 4, "ok": 2, "warn": 1, "errors": 1}
+  "summary": {"total": 6, "ok": 3, "warn": 2, "errors": 1}
 }
 ```
 
