@@ -8,6 +8,7 @@ const (
 	AgentOpenCode   = "opencode"
 	AgentCodex      = "codex"
 	AgentQwen       = "qwen"
+	AgentOpenClaw   = "openclaw"
 )
 
 // AgentResult holds the scan result for a single agent.

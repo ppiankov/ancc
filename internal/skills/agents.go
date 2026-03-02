@@ -390,3 +390,39 @@ func scanQwen(_ string, homeDir string) AgentResult {
 	r.Tokens = bytesToTokens(bytes)
 	return r
 }
+
+func scanOpenClaw(_ string, homeDir string) AgentResult {
+	r := AgentResult{Name: AgentOpenClaw, Advisory: true}
+	var bytes int64
+
+	if homeDir == "" {
+		return r
+	}
+
+	homeSkillsDir := filepath.Join(homeDir, ".openclaw", "skills")
+	homeCount := countSkillDirs(homeSkillsDir)
+	r.Skills += homeCount
+	if homeCount > 0 {
+		r.Sources = append(r.Sources, "~/.openclaw/skills/ (advisory)")
+	}
+	bytes += dirBytesRecursive(homeSkillsDir)
+
+	cfgPath := filepath.Join(homeDir, ".openclaw", "openclaw.json")
+	mcpCount := parseMCPServers(cfgPath)
+	if mcpCount > 0 {
+		r.MCP += mcpCount
+		r.Sources = append(r.Sources, "~/.openclaw/openclaw.json (advisory)")
+	}
+	bytes += fileBytes(cfgPath)
+
+	mcporterPath := filepath.Join(homeDir, ".openclaw", "config", "mcporter.json")
+	mcporterCount := parseMCPServers(mcporterPath)
+	if mcporterCount > 0 {
+		r.MCP += mcporterCount
+		r.Sources = append(r.Sources, "~/.openclaw/config/mcporter.json (advisory)")
+	}
+	bytes += fileBytes(mcporterPath)
+
+	r.Tokens = bytesToTokens(bytes)
+	return r
+}

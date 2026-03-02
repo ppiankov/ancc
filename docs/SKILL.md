@@ -64,7 +64,7 @@ Creates a template SKILL.md in the current directory with all required sections.
 
 ### ancc skills
 
-Scans for agent configurations in a directory. Detects Claude Code, Cline, Cursor, OpenCode, Codex, and Qwen setups.
+Scans for agent configurations in a directory. Detects Claude Code, Cline, Cursor, OpenCode, Codex, Qwen, and OpenClaw setups.
 
 **Flags:**
 - `--format json` — output as JSON (default: human-readable)
@@ -155,3 +155,17 @@ ancc skills --tokens . --format json | jq '.agents[] | {name, tokens}'
 # Check doctor status
 ancc doctor --format json | jq '.status'
 ```
+
+## Supported agents
+
+| Agent | Config paths scanned | Advisory |
+|-------|---------------------|----------|
+| claude-code | `~/.claude/settings.json`, `~/.claude/skills/`, `~/.claude/CLAUDE.md`, `.claude/skills/`, `.claude/settings.local.json`, `CLAUDE.md`, `CLAUDE.local.md` | No |
+| cline | `~/.cline/skills/`, `.clinerules/` | No |
+| cursor | `.cursor/rules/*.mdc`, `~/.cursor/mcp.json` | No |
+| opencode | `~/.config/opencode/opencode.json`, `opencode.json` (project) | Yes |
+| codex | `~/.codex/AGENTS.md`, `~/.codex/skills/`, `~/.codex/config.toml`, `AGENTS.md`, `.codex/` | Yes |
+| qwen | `~/.qwen/skills/`, `~/.qwen/settings.json` | Yes |
+| openclaw | `~/.openclaw/skills/`, `~/.openclaw/openclaw.json`, `~/.openclaw/config/mcporter.json` | Yes |
+
+Advisory agents are detected but not considered primary — their config paths are labeled accordingly in output.

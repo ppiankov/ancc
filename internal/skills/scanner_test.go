@@ -769,6 +769,101 @@ func TestScanQwen_HomeSkillsAndMCP(t *testing.T) {
 	}
 }
 
+// --- scanOpenClaw ---
+
+func TestScanOpenClaw_NoConfig(t *testing.T) {
+	r := scanOpenClaw("", t.TempDir())
+	if r.Skills != 0 || r.MCP != 0 {
+		t.Errorf("expected zeros, got skills=%d mcp=%d", r.Skills, r.MCP)
+	}
+	if !r.Advisory {
+		t.Error("expected advisory=true")
+	}
+}
+
+func TestScanOpenClaw_EmptyHome(t *testing.T) {
+	r := scanOpenClaw("", "")
+	if r.Skills != 0 || r.MCP != 0 {
+		t.Errorf("expected zeros, got skills=%d mcp=%d", r.Skills, r.MCP)
+	}
+}
+
+func TestScanOpenClaw_WithSkills(t *testing.T) {
+	home := t.TempDir()
+	mkdirAll(t, filepath.Join(home, ".openclaw", "skills", "chainwatch"))
+	mkdirAll(t, filepath.Join(home, ".openclaw", "skills", "safety"))
+
+	r := scanOpenClaw("", home)
+	if r.Skills != 2 {
+		t.Errorf("skills = %d, want 2", r.Skills)
+	}
+}
+
+func TestScanOpenClaw_WithMCP(t *testing.T) {
+	home := t.TempDir()
+	cfg := map[string]interface{}{
+		"mcpServers": map[string]interface{}{
+			"chainwatch": map[string]interface{}{"command": "chainwatch-mcp"},
+		},
+	}
+	data, _ := json.Marshal(cfg)
+	writeTestFile(t, filepath.Join(home, ".openclaw", "openclaw.json"), string(data))
+
+	r := scanOpenClaw("", home)
+	if r.MCP != 1 {
+		t.Errorf("mcp = %d, want 1", r.MCP)
+	}
+}
+
+func TestScanOpenClaw_WithMcporter(t *testing.T) {
+	home := t.TempDir()
+	cfg := map[string]interface{}{
+		"mcpServers": map[string]interface{}{
+			"chainwatch": map[string]interface{}{"command": "chainwatch-mcp"},
+			"filesystem": map[string]interface{}{"command": "fs-server"},
+		},
+	}
+	data, _ := json.Marshal(cfg)
+	writeTestFile(t, filepath.Join(home, ".openclaw", "config", "mcporter.json"), string(data))
+
+	r := scanOpenClaw("", home)
+	if r.MCP != 2 {
+		t.Errorf("mcp = %d, want 2", r.MCP)
+	}
+}
+
+func TestScanOpenClaw_SkillsAndMCP(t *testing.T) {
+	home := t.TempDir()
+	mkdirAll(t, filepath.Join(home, ".openclaw", "skills", "safety"))
+
+	mainCfg := map[string]interface{}{
+		"mcpServers": map[string]interface{}{
+			"chainwatch": map[string]interface{}{"command": "chainwatch-mcp"},
+		},
+	}
+	data, _ := json.Marshal(mainCfg)
+	writeTestFile(t, filepath.Join(home, ".openclaw", "openclaw.json"), string(data))
+
+	mcporter := map[string]interface{}{
+		"mcpServers": map[string]interface{}{
+			"extra": map[string]interface{}{"command": "extra-mcp"},
+		},
+	}
+	data, _ = json.Marshal(mcporter)
+	writeTestFile(t, filepath.Join(home, ".openclaw", "config", "mcporter.json"), string(data))
+
+	r := scanOpenClaw("", home)
+	if r.Skills != 1 {
+		t.Errorf("skills = %d, want 1", r.Skills)
+	}
+	if r.MCP != 2 { // 1 from openclaw.json + 1 from mcporter.json
+		t.Errorf("mcp = %d, want 2", r.MCP)
+	}
+	if len(r.Sources) != 3 {
+		t.Errorf("sources = %d, want 3", len(r.Sources))
+	}
+}
+
 // --- ScanWithHome (integration) ---
 
 func TestScanWithHome_EmptyDir(t *testing.T) {
