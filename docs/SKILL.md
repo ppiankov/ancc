@@ -95,6 +95,52 @@ Scans for agent configurations in a directory. Detects Claude Code, Cline, Curso
 **Exit codes:**
 - 0: scan completed
 
+### ancc audit
+
+Deep inspection of agent configurations. Goes beyond counting to verify that hooks, MCP servers, and skills are valid and functional.
+
+**Flags:**
+- `--format json` — output as JSON (default: human-readable)
+- `--agent <name>` — audit only this agent
+
+**Checks performed:**
+- **Hooks** — does each hook command/script exist? Resolves `~/` paths and PATH lookups
+- **MCP servers** — does each server command binary exist in PATH or at its specified path?
+- **Skills** — is each skill directory non-empty? Reports file count per skill
+
+**JSON output:**
+```json
+{
+  "path": "/path/to/project",
+  "agents": [
+    {
+      "name": "claude-code",
+      "entries": [
+        {
+          "category": "hook",
+          "name": "PreToolUse/Bash",
+          "status": "ok",
+          "message": "~/.claude/hooks/bash-guard.sh (found)"
+        },
+        {
+          "category": "mcp",
+          "name": "pastewatch",
+          "status": "error",
+          "message": "pastewatch-cli (not found in PATH)",
+          "path": "~/.claude/settings.json"
+        }
+      ]
+    }
+  ],
+  "summary": {"total": 2, "ok": 1, "warn": 0, "errors": 1}
+}
+```
+
+**Exit codes:**
+- 0: all checks pass
+- 1: one or more errors found
+- 2: warnings only, no errors
+
 ### ancc doctor
 
 Checks ancc's own health and reports companion tools.
@@ -151,6 +197,15 @@ ancc skills . --format json | jq '.agents[].name'
 
 # Get per-agent token estimates
 ancc skills --tokens . --format json | jq '.agents[] | {name, tokens}'
+
+# Audit all agents — check hooks, MCP, skills validity
+ancc audit
+
+# Audit single agent
+ancc audit --agent claude-code
+
+# Get audit errors as JSON
+ancc audit --format json | jq '.agents[].entries[] | select(.status == "error")'
 
 # Check doctor status
 ancc doctor --format json | jq '.status'
