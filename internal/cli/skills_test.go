@@ -102,6 +102,78 @@ func TestSkillsCmd_JSONIncludesTokens(t *testing.T) {
 	}
 }
 
+func TestSkillsCmd_BudgetFlag(t *testing.T) {
+	proj := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(proj, ".clinerules"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	content := strings.Repeat("x", 400)
+	if err := os.WriteFile(filepath.Join(proj, ".clinerules", "rule.md"), []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	cmd := newRootCmd("test")
+	buf := new(bytes.Buffer)
+	cmd.SetOut(buf)
+	cmd.SetArgs([]string{"skills", "--budget", "200000", proj})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	output := buf.String()
+	if !strings.Contains(output, "Budget") {
+		t.Error("expected Budget column header in output")
+	}
+	if !strings.Contains(output, "Tokens") {
+		t.Error("--budget should imply --tokens")
+	}
+	if !strings.Contains(output, "%") {
+		t.Error("expected percentage in output")
+	}
+}
+
+func TestSkillsCmd_BudgetJSON(t *testing.T) {
+	proj := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(proj, ".clinerules"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	content := strings.Repeat("x", 800)
+	if err := os.WriteFile(filepath.Join(proj, ".clinerules", "rule.md"), []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	cmd := newRootCmd("test")
+	buf := new(bytes.Buffer)
+	cmd.SetOut(buf)
+	cmd.SetArgs([]string{"skills", "--budget", "200000", "--format", "json", proj})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Verify budget_pct is in JSON output.
+	if !strings.Contains(buf.String(), "budget_pct") {
+		t.Errorf("expected budget_pct in JSON output; got: %s", buf.String())
+	}
+
+	// Parse and verify structure.
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(buf.Bytes(), &raw); err != nil {
+		t.Fatalf("invalid JSON: %v", err)
+	}
+	var agents []map[string]interface{}
+	if err := json.Unmarshal(raw["agents"], &agents); err != nil {
+		t.Fatalf("invalid agents JSON: %v", err)
+	}
+	if len(agents) == 0 {
+		t.Fatal("expected at least one agent")
+	}
+	if _, ok := agents[0]["budget_pct"]; !ok {
+		t.Error("expected budget_pct field in agent JSON")
+	}
+}
+
 func TestFormatTokenCount(t *testing.T) {
 	tests := []struct {
 		input int64
