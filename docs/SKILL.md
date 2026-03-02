@@ -37,8 +37,8 @@ Validates a CLI tool's repo against the ANCC convention. Checks SKILL.md structu
     }
   ],
   "summary": {
-    "total": 11,
-    "pass": 10,
+    "total": 15,
+    "pass": 14,
     "fail": 0,
     "warn": 1
   }
@@ -69,6 +69,7 @@ Scans for agent configurations in a directory. Detects Claude Code, Cline, Curso
 **Flags:**
 - `--format json` — output as JSON (default: human-readable)
 - `--tokens` — show estimated token counts per agent
+- `--budget <N>` — context window size in tokens; shows percentage consumed per agent (implies `--tokens`)
 
 **JSON output:**
 ```json
@@ -80,17 +81,20 @@ Scans for agent configurations in a directory. Detects Claude Code, Cline, Curso
       "skills": 26,
       "hooks": 8,
       "mcp": 0,
-      "tokens": 3400,
+      "tokens": 15496,
       "sources": ["~/.claude/settings.json", "~/.claude/skills/"],
-      "advisory": false
+      "advisory": false,
+      "budget_pct": 7.7
     }
   ],
   "product": {
     "path": "/path/to/project/docs/SKILL.md",
-    "name": "mytool"
+    "name": "ancc"
   }
 }
 ```
+
+Note: `budget_pct` field is only present when `--budget` is set.
 
 **Exit codes:**
 - 0: scan completed
@@ -196,6 +200,51 @@ Checks ancc's own health and reports companion tools.
 - 0: all healthy or warnings only
 - 1: critical issue found
 
+### ancc scan
+
+Batch validates all repos in a directory. Walks the directory tree, finds git repos, and runs ANCC validation on each.
+
+**Flags:**
+- `--format json` — output as JSON (default: human-readable)
+- `--depth <N>` — maximum directory depth to search (default: 2)
+
+**JSON output:**
+```json
+{
+  "path": "/path/to/parent",
+  "repos": [
+    {
+      "name": "ancc",
+      "path": "/path/to/parent/ancc",
+      "status": "partial",
+      "summary": {
+        "total": 15,
+        "pass": 14,
+        "fail": 0,
+        "warn": 1
+      }
+    },
+    {
+      "name": "noisepan",
+      "path": "/path/to/parent/noisepan",
+      "status": "missing"
+    }
+  ],
+  "summary": {
+    "total": 2,
+    "pass": 0,
+    "fail": 0,
+    "partial": 1,
+    "missing": 1
+  }
+}
+```
+
+**Exit codes:**
+- 0: all repos pass (or all missing)
+- 1: one or more repos fail
+- 2: warnings only across all repos
+
 ### ancc version
 
 Prints the version of ancc.
@@ -240,6 +289,18 @@ ancc audit --format json | jq '.agents[].entries[] | select(.status == "error")'
 
 # Check environment security — accessible sensitive directories
 ancc audit --format json | jq '.environment[] | select(.status == "warn")'
+
+# Batch validate all repos under a directory
+ancc scan ~/dev/
+
+# Scan with JSON output — list failing repos
+ancc scan ~/dev/ --format json | jq '.repos[] | select(.status == "fail") | .name'
+
+# Scan with limited depth
+ancc scan ~/dev/ --depth 1
+
+# Get per-agent budget percentages
+ancc skills --budget 200000 --format json | jq '.agents[] | {name, tokens, budget_pct}'
 
 # Check doctor status
 ancc doctor --format json | jq '.status'
