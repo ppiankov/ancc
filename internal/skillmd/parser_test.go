@@ -17,8 +17,8 @@ func TestParseFile_Valid(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if sf.Name != "mytool" {
-		t.Errorf("Name = %q, want %q", sf.Name, "mytool")
+	if sf.Name != "demotool" {
+		t.Errorf("Name = %q, want %q", sf.Name, "demotool")
 	}
 	if sf.Description != "A tool that does something useful." {
 		t.Errorf("Description = %q, want %q", sf.Description, "A tool that does something useful.")
@@ -37,8 +37,8 @@ func TestParseFile_Valid(t *testing.T) {
 	}
 
 	run := sf.Commands[0]
-	if run.Name != "mytool run" {
-		t.Errorf("Commands[0].Name = %q, want %q", run.Name, "mytool run")
+	if run.Name != "demotool run" {
+		t.Errorf("Commands[0].Name = %q, want %q", run.Name, "demotool run")
 	}
 	if run.Desc != "Runs the main operation." {
 		t.Errorf("Commands[0].Desc = %q, want %q", run.Desc, "Runs the main operation.")

@@ -245,14 +245,13 @@ func TestValidate_ValidFixture(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if result.Summary.Total != 11 {
-		t.Errorf("total = %d, want 11", result.Summary.Total)
+	if result.Summary.Total != 15 {
+		t.Errorf("total = %d, want 15", result.Summary.Total)
 	}
 	if result.Summary.Fail != 0 {
 		t.Errorf("fail = %d, want 0", result.Summary.Fail)
 	}
-	// binary-release and doctor are warn for valid fixture with doctor
-	// Actually valid-skill.md has doctor, so only binary-release warns.
+	// binary-release is the only warn for valid fixture.
 	if result.Summary.Warn != 1 {
 		t.Errorf("warn = %d, want 1 (binary-release skipped)", result.Summary.Warn)
 	}
@@ -271,8 +270,8 @@ func TestValidate_MissingSkillMD(t *testing.T) {
 	if result.Status != OverallFail {
 		t.Errorf("status = %q, want %q", result.Status, OverallFail)
 	}
-	if result.Summary.Total != 11 {
-		t.Errorf("total = %d, want 11", result.Summary.Total)
+	if result.Summary.Total != 15 {
+		t.Errorf("total = %d, want 15", result.Summary.Total)
 	}
 }
 
@@ -318,8 +317,8 @@ func TestValidate_DocsSubdir(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if result.Summary.Total != 11 {
-		t.Errorf("total = %d, want 11", result.Summary.Total)
+	if result.Summary.Total != 15 {
+		t.Errorf("total = %d, want 15", result.Summary.Total)
 	}
 	if result.Summary.Fail != 0 {
 		t.Errorf("fail = %d, want 0", result.Summary.Fail)
@@ -369,5 +368,143 @@ func TestComputeSummary_WithFail(t *testing.T) {
 	}
 	if r.Summary.Total != 3 {
 		t.Errorf("total = %d, want 3", r.Summary.Total)
+	}
+}
+
+// --- Semantic quality check tests ---
+
+func TestCheckJSONExamplesValid_AllValid(t *testing.T) {
+	sf := loadFixture(t, "valid-skill.md")
+	r := checkJSONExamplesValid(sf)
+	if r.Status != StatusPass {
+		t.Errorf("status = %q, want %q; message: %s", r.Status, StatusPass, r.Message)
+	}
+}
+
+func TestCheckJSONExamplesValid_NoJSON(t *testing.T) {
+	sf := &skillmd.SkillFile{
+		Commands: []skillmd.Command{{Name: "tool run"}},
+	}
+	r := checkJSONExamplesValid(sf)
+	if r.Status != StatusPass {
+		t.Errorf("status = %q, want %q", r.Status, StatusPass)
+	}
+}
+
+func TestCheckJSONExamplesValid_InvalidJSON(t *testing.T) {
+	sf := &skillmd.SkillFile{
+		Commands: []skillmd.Command{
+			{Name: "tool run", JSONOutput: `{"broken": true,}`},
+		},
+	}
+	r := checkJSONExamplesValid(sf)
+	if r.Status != StatusWarn {
+		t.Errorf("status = %q, want %q; message: %s", r.Status, StatusWarn, r.Message)
+	}
+}
+
+func TestCheckExitCodesNumeric_HasZero(t *testing.T) {
+	sf := loadFixture(t, "valid-skill.md")
+	r := checkExitCodesNumeric(sf)
+	if r.Status != StatusPass {
+		t.Errorf("status = %q, want %q; message: %s", r.Status, StatusPass, r.Message)
+	}
+}
+
+func TestCheckExitCodesNumeric_NoExitCodes(t *testing.T) {
+	sf := &skillmd.SkillFile{
+		Commands: []skillmd.Command{{Name: "tool run"}},
+	}
+	r := checkExitCodesNumeric(sf)
+	if r.Status != StatusPass {
+		t.Errorf("status = %q, want %q", r.Status, StatusPass)
+	}
+}
+
+func TestCheckExitCodesNumeric_MissingZero(t *testing.T) {
+	sf := &skillmd.SkillFile{
+		Commands: []skillmd.Command{
+			{Name: "tool run", ExitCodes: []skillmd.ExitCode{{Code: 1, Desc: "error"}}},
+		},
+	}
+	r := checkExitCodesNumeric(sf)
+	if r.Status != StatusWarn {
+		t.Errorf("status = %q, want %q; message: %s", r.Status, StatusWarn, r.Message)
+	}
+}
+
+func TestCheckCommandsNotPlaceholder_Clean(t *testing.T) {
+	sf := loadFixture(t, "valid-skill.md")
+	r := checkCommandsNotPlaceholder(sf)
+	if r.Status != StatusPass {
+		t.Errorf("status = %q, want %q; message: %s", r.Status, StatusPass, r.Message)
+	}
+}
+
+func TestCheckCommandsNotPlaceholder_PlaceholderName(t *testing.T) {
+	sf := &skillmd.SkillFile{
+		Name:     "mytool",
+		Commands: []skillmd.Command{{Name: "mytool run"}},
+	}
+	r := checkCommandsNotPlaceholder(sf)
+	if r.Status != StatusWarn {
+		t.Errorf("status = %q, want %q; message: %s", r.Status, StatusWarn, r.Message)
+	}
+}
+
+func TestCheckCommandsNotPlaceholder_TemplateVar(t *testing.T) {
+	sf := &skillmd.SkillFile{
+		Name:     "realtool",
+		Commands: []skillmd.Command{{Name: "<tool> run"}},
+	}
+	r := checkCommandsNotPlaceholder(sf)
+	if r.Status != StatusWarn {
+		t.Errorf("status = %q, want %q; message: %s", r.Status, StatusWarn, r.Message)
+	}
+}
+
+func TestCheckInstallHasCommand_Present(t *testing.T) {
+	sf := loadFixture(t, "valid-skill.md")
+	r := checkInstallHasCommand(sf)
+	if r.Status != StatusPass {
+		t.Errorf("status = %q, want %q; message: %s", r.Status, StatusPass, r.Message)
+	}
+}
+
+func TestCheckInstallHasCommand_NoSection(t *testing.T) {
+	sf := &skillmd.SkillFile{Sections: map[string]*skillmd.Section{}}
+	r := checkInstallHasCommand(sf)
+	if r.Status != StatusPass {
+		t.Errorf("status = %q, want %q (no section to check)", r.Status, StatusPass)
+	}
+}
+
+func TestCheckInstallHasCommand_NoCommand(t *testing.T) {
+	sf := &skillmd.SkillFile{
+		Sections: map[string]*skillmd.Section{
+			skillmd.SectionInstall: {
+				Heading: "Install",
+				Content: "Download from the website and follow instructions.",
+			},
+		},
+	}
+	r := checkInstallHasCommand(sf)
+	if r.Status != StatusWarn {
+		t.Errorf("status = %q, want %q; message: %s", r.Status, StatusWarn, r.Message)
+	}
+}
+
+func TestCheckInstallHasCommand_GoInstall(t *testing.T) {
+	sf := &skillmd.SkillFile{
+		Sections: map[string]*skillmd.Section{
+			skillmd.SectionInstall: {
+				Heading: "Install",
+				Content: "```\ngo install github.com/example/tool@latest\n```",
+			},
+		},
+	}
+	r := checkInstallHasCommand(sf)
+	if r.Status != StatusPass {
+		t.Errorf("status = %q, want %q; message: %s", r.Status, StatusPass, r.Message)
 	}
 }

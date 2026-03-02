@@ -26,12 +26,12 @@ func TestSelfValidation(t *testing.T) {
 		t.Fatalf("self-validation failed: %d check(s) failed", result.Summary.Fail)
 	}
 
-	if result.Summary.Total != 11 {
-		t.Errorf("expected 11 checks, got %d", result.Summary.Total)
+	if result.Summary.Total != 15 {
+		t.Errorf("expected 15 checks, got %d", result.Summary.Total)
 	}
 
 	// binary-release is expected to warn for local validation.
-	expectedPass := 10
+	expectedPass := 14
 	if result.Summary.Pass != expectedPass {
 		t.Errorf("expected %d pass, got %d", expectedPass, result.Summary.Pass)
 	}

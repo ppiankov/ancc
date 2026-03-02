@@ -226,19 +226,19 @@ func TestIsBinaryAsset(t *testing.T) {
 }
 
 func TestValidateGitHubWithClient_ValidRepo(t *testing.T) {
-	skillContent := `# mytool
+	skillContent := `# demotool
 
 A tool.
 
 ## Install
 
 ` + "```" + `
-brew install mytool
+brew install demotool
 ` + "```" + `
 
 ## Commands
 
-### mytool run
+### demotool run
 
 Runs things.
 
@@ -254,11 +254,11 @@ Runs things.
 - 0: success
 - 1: failure
 
-### mytool init
+### demotool init
 
 Inits stuff.
 
-### mytool doctor
+### demotool doctor
 
 Checks health.
 
@@ -269,7 +269,7 @@ Checks health.
 ## Parsing examples
 
 ` + "```bash" + `
-mytool run --format json | jq '.'
+demotool run --format json | jq '.'
 ` + "```" + `
 `
 
@@ -284,7 +284,7 @@ mytool run --format json | jq '.'
 		_, _ = w.Write([]byte(skillContent))
 	})
 	mux.HandleFunc("/repos/owner/repo/releases", func(w http.ResponseWriter, r *http.Request) {
-		releases := []release{{TagName: "v1.0.0", Assets: []releaseAsset{{Name: "mytool-linux-amd64.tar.gz"}}}}
+		releases := []release{{TagName: "v1.0.0", Assets: []releaseAsset{{Name: "demotool-linux-amd64.tar.gz"}}}}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(releases)
 	})
@@ -300,8 +300,8 @@ mytool run --format json | jq '.'
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if result.Summary.Total != 11 {
-		t.Errorf("total = %d, want 11", result.Summary.Total)
+	if result.Summary.Total != 15 {
+		t.Errorf("total = %d, want 15", result.Summary.Total)
 	}
 	if result.Summary.Fail != 0 {
 		t.Errorf("fail = %d, want 0", result.Summary.Fail)
@@ -330,7 +330,7 @@ func TestValidateGitHubWithClient_NoSkillMD(t *testing.T) {
 	if result.Status != OverallFail {
 		t.Errorf("status = %q, want %q", result.Status, OverallFail)
 	}
-	if result.Summary.Total != 11 {
-		t.Errorf("total = %d, want 11", result.Summary.Total)
+	if result.Summary.Total != 15 {
+		t.Errorf("total = %d, want 15", result.Summary.Total)
 	}
 }

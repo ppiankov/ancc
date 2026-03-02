@@ -1,16 +1,16 @@
-# mytool
+# demotool
 
 A tool that does something useful.
 
 ## Install
 
 ```
-brew install ppiankov/tap/mytool
+brew install ppiankov/tap/demotool
 ```
 
 ## Commands
 
-### mytool run
+### demotool run
 
 Runs the main operation.
 
@@ -30,7 +30,7 @@ Runs the main operation.
 - 0: success
 - 1: failure
 
-### mytool check
+### demotool check
 
 Checks the current state.
 
@@ -48,7 +48,7 @@ Checks the current state.
 - 0: healthy
 - 1: unhealthy
 
-### mytool init
+### demotool init
 
 Initializes configuration.
 
@@ -56,7 +56,7 @@ Initializes configuration.
 - 0: created
 - 1: already exists
 
-### mytool doctor
+### demotool doctor
 
 Checks tool health and dependencies.
 
@@ -75,5 +75,5 @@ Checks tool health and dependencies.
 ## Parsing examples
 
 ```bash
-mytool run --format json | jq '.status'
+demotool run --format json | jq '.status'
 ```

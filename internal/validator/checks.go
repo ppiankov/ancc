@@ -1,6 +1,7 @@
 package validator
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -11,17 +12,21 @@ import (
 
 // Check names.
 const (
-	CheckSkillMDExists    = "skill-md-exists"
-	CheckSkillMDInstall   = "skill-md-install"
-	CheckSkillMDCommands  = "skill-md-commands"
-	CheckSkillMDFlags     = "skill-md-flags"
-	CheckSkillMDJSON      = "skill-md-json-output"
-	CheckSkillMDExitCodes = "skill-md-exit-codes"
-	CheckSkillMDNotDo     = "skill-md-not-do"
-	CheckSkillMDParsing   = "skill-md-parsing"
-	CheckHasInitCommand   = "has-init-command"
-	CheckHasDoctorCommand = "has-doctor-command"
-	CheckHasBinaryRelease = "has-binary-release"
+	CheckSkillMDExists          = "skill-md-exists"
+	CheckSkillMDInstall         = "skill-md-install"
+	CheckSkillMDCommands        = "skill-md-commands"
+	CheckSkillMDFlags           = "skill-md-flags"
+	CheckSkillMDJSON            = "skill-md-json-output"
+	CheckSkillMDExitCodes       = "skill-md-exit-codes"
+	CheckSkillMDNotDo           = "skill-md-not-do"
+	CheckSkillMDParsing         = "skill-md-parsing"
+	CheckHasInitCommand         = "has-init-command"
+	CheckHasDoctorCommand       = "has-doctor-command"
+	CheckHasBinaryRelease       = "has-binary-release"
+	CheckJSONExamplesValid      = "json-examples-valid"
+	CheckExitCodesNumeric       = "exit-codes-numeric"
+	CheckCommandsNotPlaceholder = "commands-not-placeholder"
+	CheckInstallHasCommand      = "install-has-command"
 )
 
 func pass(name, msg string) CheckResult {
@@ -152,4 +157,103 @@ func checkDoctorCommand(sf *skillmd.SkillFile) CheckResult {
 func checkBinaryRelease(_ string) CheckResult {
 	// GitHub release checking is WO-005 scope.
 	return warn(CheckHasBinaryRelease, "binary release check requires GitHub URL (skipped)")
+}
+
+// --- Semantic quality checks ---
+
+// checkJSONExamplesValid verifies all JSON code blocks in commands are parseable.
+func checkJSONExamplesValid(sf *skillmd.SkillFile) CheckResult {
+	checked := 0
+	for _, cmd := range sf.Commands {
+		if cmd.JSONOutput == "" {
+			continue
+		}
+		checked++
+		if !json.Valid([]byte(cmd.JSONOutput)) {
+			return warn(CheckJSONExamplesValid,
+				fmt.Sprintf("invalid JSON in %s output example", cmd.Name))
+		}
+	}
+	if checked == 0 {
+		return pass(CheckJSONExamplesValid, "no JSON examples to validate")
+	}
+	return pass(CheckJSONExamplesValid, fmt.Sprintf("%d JSON example(s) valid", checked))
+}
+
+// checkExitCodesNumeric verifies that at least one command defines exit code 0 (success).
+func checkExitCodesNumeric(sf *skillmd.SkillFile) CheckResult {
+	hasExitCodes := false
+	hasZero := false
+	for _, cmd := range sf.Commands {
+		if len(cmd.ExitCodes) > 0 {
+			hasExitCodes = true
+			for _, ec := range cmd.ExitCodes {
+				if ec.Code == 0 {
+					hasZero = true
+				}
+			}
+		}
+	}
+	if !hasExitCodes {
+		return pass(CheckExitCodesNumeric, "no exit codes to validate")
+	}
+	if !hasZero {
+		return warn(CheckExitCodesNumeric, "no command defines exit code 0 (success)")
+	}
+	return pass(CheckExitCodesNumeric, "exit code 0 (success) documented")
+}
+
+// placeholderNames are names that indicate unfilled template content.
+var placeholderNames = []string{
+	"mytool", "example", "placeholder", "yourapp", "yourtool", "myapp",
+}
+
+// checkCommandsNotPlaceholder warns if the tool name or commands use placeholder names.
+func checkCommandsNotPlaceholder(sf *skillmd.SkillFile) CheckResult {
+	name := strings.ToLower(sf.Name)
+	for _, ph := range placeholderNames {
+		if name == ph {
+			return warn(CheckCommandsNotPlaceholder,
+				fmt.Sprintf("tool name %q looks like a placeholder", sf.Name))
+		}
+	}
+	for _, cmd := range sf.Commands {
+		if strings.HasPrefix(cmd.Name, "<") {
+			return warn(CheckCommandsNotPlaceholder,
+				fmt.Sprintf("command %q looks like a template variable", cmd.Name))
+		}
+	}
+	return pass(CheckCommandsNotPlaceholder, "no placeholder names detected")
+}
+
+// installCommands are prefixes that indicate a real install command.
+var installCommands = []string{
+	"brew ", "go install ", "npm ", "pip ", "cargo ", "apt ", "yum ",
+	"dnf ", "curl ", "wget ", "docker ", "snap ",
+}
+
+// checkInstallHasCommand verifies the Install section contains a recognizable install command.
+func checkInstallHasCommand(sf *skillmd.SkillFile) CheckResult {
+	section := sf.Sections[skillmd.SectionInstall]
+	if section == nil {
+		return pass(CheckInstallHasCommand, "no Install section (checked elsewhere)")
+	}
+
+	inCodeBlock := false
+	for _, line := range strings.Split(section.Content, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "```") {
+			inCodeBlock = !inCodeBlock
+			continue
+		}
+		if !inCodeBlock {
+			continue
+		}
+		for _, prefix := range installCommands {
+			if strings.HasPrefix(trimmed, prefix) {
+				return pass(CheckInstallHasCommand, "install command found")
+			}
+		}
+	}
+	return warn(CheckInstallHasCommand, "Install section has no recognizable install command")
 }

@@ -41,6 +41,10 @@ func Validate(path string) (*ValidationResult, error) {
 			fail(CheckHasInitCommand, "SKILL.md not found"),
 			warn(CheckHasDoctorCommand, "SKILL.md not found"),
 			checkBinaryRelease(""),
+			pass(CheckJSONExamplesValid, "SKILL.md not found"),
+			pass(CheckExitCodesNumeric, "SKILL.md not found"),
+			pass(CheckCommandsNotPlaceholder, "SKILL.md not found"),
+			pass(CheckInstallHasCommand, "SKILL.md not found"),
 		)
 		computeSummary(result)
 		return result, nil
@@ -64,6 +68,11 @@ func Validate(path string) (*ValidationResult, error) {
 		checkInitCommand(sf),
 		checkDoctorCommand(sf),
 		checkBinaryRelease(""),
+		// Semantic quality checks.
+		checkJSONExamplesValid(sf),
+		checkExitCodesNumeric(sf),
+		checkCommandsNotPlaceholder(sf),
+		checkInstallHasCommand(sf),
 	)
 
 	computeSummary(result)
@@ -96,6 +105,10 @@ func validateGitHubWithClient(client *gitHubClient, owner, repo string) (*Valida
 			fail(CheckSkillMDParsing, "SKILL.md not found"),
 			fail(CheckHasInitCommand, "SKILL.md not found"),
 			warn(CheckHasDoctorCommand, "SKILL.md not found"),
+			pass(CheckJSONExamplesValid, "SKILL.md not found"),
+			pass(CheckExitCodesNumeric, "SKILL.md not found"),
+			pass(CheckCommandsNotPlaceholder, "SKILL.md not found"),
+			pass(CheckInstallHasCommand, "SKILL.md not found"),
 		)
 		// Still check binary releases.
 		result.Checks = append(result.Checks, checkBinaryReleaseGitHub(client, owner, repo))
@@ -122,6 +135,11 @@ func validateGitHubWithClient(client *gitHubClient, owner, repo string) (*Valida
 		checkInitCommand(sf),
 		checkDoctorCommand(sf),
 		checkBinaryReleaseGitHub(client, owner, repo),
+		// Semantic quality checks.
+		checkJSONExamplesValid(sf),
+		checkExitCodesNumeric(sf),
+		checkCommandsNotPlaceholder(sf),
+		checkInstallHasCommand(sf),
 	)
 
 	computeSummary(result)
