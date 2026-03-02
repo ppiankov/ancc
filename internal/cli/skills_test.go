@@ -34,8 +34,8 @@ func TestSkillsCmd_TokensFlag(t *testing.T) {
 	if !strings.Contains(output, "Tokens") {
 		t.Error("expected Tokens column header in output")
 	}
-	if !strings.Contains(output, "Total context tax") {
-		t.Error("expected 'Total context tax' line in output")
+	if strings.Contains(output, "Total context tax") {
+		t.Error("total line should not appear — agents load independently")
 	}
 }
 
@@ -60,9 +60,6 @@ func TestSkillsCmd_NoTokensFlag(t *testing.T) {
 	output := buf.String()
 	if strings.Contains(output, "Tokens") {
 		t.Error("Tokens column should be hidden without --tokens flag")
-	}
-	if strings.Contains(output, "Total context tax") {
-		t.Error("Total context tax should be hidden without --tokens flag")
 	}
 }
 
@@ -102,9 +99,6 @@ func TestSkillsCmd_JSONIncludesTokens(t *testing.T) {
 	}
 	if clineAgent.Tokens != 20 { // 80 / 4
 		t.Errorf("cline tokens = %d, want 20", clineAgent.Tokens)
-	}
-	if result.TotalTokens == 0 {
-		t.Error("expected non-zero total_tokens")
 	}
 }
 

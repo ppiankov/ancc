@@ -85,7 +85,6 @@ Scans for agent configurations in a directory. Detects Claude Code, Cline, Curso
       "advisory": false
     }
   ],
-  "total_tokens": 3400,
   "product": {
     "path": "/path/to/project/docs/SKILL.md",
     "name": "mytool"
@@ -150,8 +149,8 @@ ancc validate . || echo "ANCC validation failed"
 # List detected agents
 ancc skills . --format json | jq '.agents[].name'
 
-# Get total context tax (estimated tokens)
-ancc skills --tokens . --format json | jq '.total_tokens'
+# Get per-agent token estimates
+ancc skills --tokens . --format json | jq '.agents[] | {name, tokens}'
 
 # Check doctor status
 ancc doctor --format json | jq '.status'

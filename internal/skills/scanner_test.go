@@ -577,7 +577,7 @@ func TestScanCodex_Tokens(t *testing.T) {
 	}
 }
 
-func TestScanWithHome_TotalTokens(t *testing.T) {
+func TestScanWithHome_AgentTokens(t *testing.T) {
 	home := t.TempDir()
 	proj := t.TempDir()
 
@@ -589,9 +589,6 @@ func TestScanWithHome_TotalTokens(t *testing.T) {
 	result, err := ScanWithHome(proj, home)
 	if err != nil {
 		t.Fatal(err)
-	}
-	if result.TotalTokens == 0 {
-		t.Error("expected non-zero TotalTokens")
 	}
 
 	// Verify individual agents have tokens.
@@ -609,9 +606,6 @@ func TestScanWithHome_TotalTokens(t *testing.T) {
 	}
 	if clineTokens != 50 { // 200 / 4
 		t.Errorf("cline tokens = %d, want 50", clineTokens)
-	}
-	if result.TotalTokens != claudeTokens+clineTokens {
-		t.Errorf("total = %d, want %d", result.TotalTokens, claudeTokens+clineTokens)
 	}
 }
 

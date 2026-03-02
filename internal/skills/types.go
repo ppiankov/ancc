@@ -29,8 +29,7 @@ type ANCCProduct struct {
 
 // ScanResult holds the complete scan output.
 type ScanResult struct {
-	Path        string        `json:"path"`
-	Agents      []AgentResult `json:"agents"`
-	TotalTokens int64         `json:"total_tokens"`
-	Product     *ANCCProduct  `json:"product,omitempty"`
+	Path    string        `json:"path"`
+	Agents  []AgentResult `json:"agents"`
+	Product *ANCCProduct  `json:"product,omitempty"`
 }

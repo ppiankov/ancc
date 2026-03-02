@@ -106,10 +106,6 @@ func formatSkillsText(w io.Writer, result *skills.ScanResult, showTokens bool) {
 			}
 		}
 
-		if showTokens {
-			_, _ = fmt.Fprintln(w)
-			_, _ = fmt.Fprintf(w, "  Total context tax: %s\n", formatTokenCount(result.TotalTokens))
-		}
 	}
 
 	if result.Product != nil {

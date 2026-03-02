@@ -43,10 +43,6 @@ func ScanWithHome(projectDir, homeDir string) (*ScanResult, error) {
 		}
 	}
 
-	for _, a := range result.Agents {
-		result.TotalTokens += a.Tokens
-	}
-
 	result.Product = findANCCProduct(projectDir)
 
 	return result, nil
