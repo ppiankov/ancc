@@ -107,6 +107,7 @@ Deep inspection of agent configurations. Goes beyond counting to verify that hoo
 - **Hooks** — does each hook command/script exist? Resolves `~/` paths and PATH lookups
 - **MCP servers** — does each server command binary exist in PATH or at its specified path?
 - **Skills** — is each skill directory non-empty? Reports file count per skill
+- **Environment** — probes sensitive directories (~/Documents, ~/Downloads, etc.) and credential directories (~/.ssh, ~/.aws, ~/.gnupg) for accessibility. Reports `ok` if blocked by TCC/permissions or not present, `warn` if accessible. Skipped when `--agent` filter is active.
 
 **JSON output:**
 ```json
@@ -132,7 +133,21 @@ Deep inspection of agent configurations. Goes beyond counting to verify that hoo
       ]
     }
   ],
-  "summary": {"total": 2, "ok": 1, "warn": 0, "errors": 1}
+  "environment": [
+    {
+      "category": "sensitive-dir",
+      "name": "~/Documents",
+      "status": "ok",
+      "message": "blocked (access denied)"
+    },
+    {
+      "category": "credential-dir",
+      "name": "~/.ssh",
+      "status": "warn",
+      "message": "accessible (contains credentials, agents can read)"
+    }
+  ],
+  "summary": {"total": 4, "ok": 2, "warn": 1, "errors": 1}
 }
 ```
 
@@ -206,6 +221,9 @@ ancc audit --agent claude-code
 
 # Get audit errors as JSON
 ancc audit --format json | jq '.agents[].entries[] | select(.status == "error")'
+
+# Check environment security — accessible sensitive directories
+ancc audit --format json | jq '.environment[] | select(.status == "warn")'
 
 # Check doctor status
 ancc doctor --format json | jq '.status'

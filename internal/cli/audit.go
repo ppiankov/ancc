@@ -30,6 +30,7 @@ func newAuditCmd() *cobra.Command {
 
 			if agentFilter != "" {
 				result = filterAuditAgent(result, agentFilter)
+				result.Environment = nil // skip environment checks for single-agent filter
 			}
 
 			w := cmd.OutOrStdout()
@@ -91,7 +92,7 @@ var auditStatusIcons = map[skills.AuditStatus]string{
 }
 
 func formatAuditText(w io.Writer, result *skills.AuditResult) {
-	if len(result.Agents) == 0 {
+	if len(result.Agents) == 0 && len(result.Environment) == 0 {
 		_, _ = fmt.Fprintln(w, "No agent configurations found to audit.")
 		return
 	}
@@ -117,6 +118,8 @@ func formatAuditText(w io.Writer, result *skills.AuditResult) {
 		}
 	}
 
+	envWarns := formatEnvironmentSection(w, result)
+
 	_, _ = fmt.Fprintln(w)
 	issues := result.Summary.Errors + result.Summary.Warn
 	if issues == 0 {
@@ -125,6 +128,43 @@ func formatAuditText(w io.Writer, result *skills.AuditResult) {
 		_, _ = fmt.Fprintf(w, "  Result: %d issues found (%d errors, %d warnings)\n",
 			issues, result.Summary.Errors, result.Summary.Warn)
 	}
+
+	if envWarns > 0 {
+		_, _ = fmt.Fprintln(w)
+		_, _ = fmt.Fprintln(w, "  Recommendations:")
+		_, _ = fmt.Fprintln(w, "    - Revoke Full Disk Access for your terminal app (System Settings > Privacy & Security)")
+		_, _ = fmt.Fprintln(w, "    - Use a sandboxed terminal profile for AI agent sessions")
+		_, _ = fmt.Fprintln(w, "    - Restrict agent file access with tool-level permissions (hooks, allowlists)")
+	}
+}
+
+func formatEnvironmentSection(w io.Writer, result *skills.AuditResult) int {
+	if len(result.Environment) == 0 {
+		return 0
+	}
+
+	if len(result.Agents) > 0 {
+		_, _ = fmt.Fprintln(w)
+	}
+	_, _ = fmt.Fprintln(w, "  environment")
+
+	categories := groupByCategory(result.Environment)
+	envWarns := 0
+	for _, cat := range []string{"sensitive-dir", "credential-dir"} {
+		entries, ok := categories[cat]
+		if !ok {
+			continue
+		}
+		_, _ = fmt.Fprintf(w, "    %ss:\n", cat)
+		for _, e := range entries {
+			status := auditStatusIcons[e.Status]
+			_, _ = fmt.Fprintf(w, "      [%s] %s: %s\n", status, e.Name, e.Message)
+			if e.Status == skills.AuditWarn {
+				envWarns++
+			}
+		}
+	}
+	return envWarns
 }
 
 func groupByCategory(entries []skills.AuditEntry) map[string][]skills.AuditEntry {

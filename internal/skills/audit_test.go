@@ -22,8 +22,13 @@ func mockLookPath(found ...string) func(string) (string, error) {
 	}
 }
 
+// noopReadDir always returns not-exist, preventing environment checks from producing entries.
+func noopReadDir(_ string) ([]os.DirEntry, error) {
+	return nil, os.ErrNotExist
+}
+
 func testAuditEnv(found ...string) *auditEnv {
-	return &auditEnv{lookPath: mockLookPath(found...), homeDir: "/mock/home"}
+	return &auditEnv{lookPath: mockLookPath(found...), homeDir: "/mock/home", readDir: noopReadDir}
 }
 
 // --- expandTilde ---
@@ -477,8 +482,15 @@ func TestAuditWithHome_EmptyDir(t *testing.T) {
 	if len(result.Agents) != 0 {
 		t.Errorf("agents = %d, want 0", len(result.Agents))
 	}
-	if result.Summary.Total != 0 {
-		t.Errorf("total = %d, want 0", result.Summary.Total)
+	// Environment checks produce 10 entries (all "not present" = ok).
+	if len(result.Environment) != 10 {
+		t.Errorf("environment = %d, want 10", len(result.Environment))
+	}
+	if result.Summary.Total != 10 {
+		t.Errorf("total = %d, want 10", result.Summary.Total)
+	}
+	if result.Summary.OK != 10 {
+		t.Errorf("ok = %d, want 10", result.Summary.OK)
 	}
 }
 
@@ -509,8 +521,9 @@ func TestAuditWithHome_SummaryCount(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if result.Summary.OK != 1 {
-		t.Errorf("ok = %d, want 1", result.Summary.OK)
+	// 1 hook ok + 10 environment ok = 11 ok.
+	if result.Summary.OK != 11 {
+		t.Errorf("ok = %d, want 11", result.Summary.OK)
 	}
 	if result.Summary.Errors != 1 {
 		t.Errorf("errors = %d, want 1", result.Summary.Errors)

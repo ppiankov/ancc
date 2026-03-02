@@ -44,21 +44,24 @@ type AuditSummary struct {
 
 // AuditResult is the top-level audit output.
 type AuditResult struct {
-	Path    string       `json:"path"`
-	Agents  []AgentAudit `json:"agents"`
-	Summary AuditSummary `json:"summary"`
+	Path        string       `json:"path"`
+	Agents      []AgentAudit `json:"agents"`
+	Environment []AuditEntry `json:"environment,omitempty"`
+	Summary     AuditSummary `json:"summary"`
 }
 
 // auditEnv holds injectable dependencies for testing.
 type auditEnv struct {
 	lookPath func(string) (string, error)
 	homeDir  string
+	readDir  func(string) ([]os.DirEntry, error)
 }
 
 func defaultAuditEnv(homeDir string) *auditEnv {
 	return &auditEnv{
 		lookPath: exec.LookPath,
 		homeDir:  homeDir,
+		readDir:  os.ReadDir,
 	}
 }
 
@@ -111,6 +114,8 @@ func AuditWithHome(projectDir, homeDir string, env *auditEnv) (*AuditResult, err
 		}
 	}
 
+	result.Environment = auditEnvironment(env)
+
 	for _, agent := range result.Agents {
 		for _, e := range agent.Entries {
 			result.Summary.Total++
@@ -122,6 +127,17 @@ func AuditWithHome(projectDir, homeDir string, env *auditEnv) (*AuditResult, err
 			case AuditError:
 				result.Summary.Errors++
 			}
+		}
+	}
+	for _, e := range result.Environment {
+		result.Summary.Total++
+		switch e.Status {
+		case AuditOK:
+			result.Summary.OK++
+		case AuditWarn:
+			result.Summary.Warn++
+		case AuditError:
+			result.Summary.Errors++
 		}
 	}
 
