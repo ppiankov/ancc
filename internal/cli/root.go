@@ -18,6 +18,7 @@ func newRootCmd(version string) *cobra.Command {
 	cmd.AddCommand(newDoctorCmd())
 	cmd.AddCommand(newAuditCmd())
 	cmd.AddCommand(newScanCmd())
+	cmd.AddCommand(newContextCmd())
 
 	return cmd
 }

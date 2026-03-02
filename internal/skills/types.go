@@ -11,6 +11,27 @@ const (
 	AgentOpenClaw   = "openclaw"
 )
 
+// DefaultContextWindows maps agent names to default context window sizes in tokens.
+var DefaultContextWindows = map[string]int64{
+	AgentClaudeCode: 165_000,
+	AgentCline:      128_000,
+	AgentCursor:     128_000,
+	AgentOpenCode:   128_000,
+	AgentCodex:      128_000,
+	AgentQwen:       128_000,
+	AgentOpenClaw:   128_000,
+}
+
+const defaultContextWindow int64 = 128_000
+
+// ContextWindow returns the default context window for the named agent.
+func ContextWindow(name string) int64 {
+	if w, ok := DefaultContextWindows[name]; ok {
+		return w
+	}
+	return defaultContextWindow
+}
+
 // AgentResult holds the scan result for a single agent.
 type AgentResult struct {
 	Name     string   `json:"name"`

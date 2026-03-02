@@ -110,6 +110,14 @@ internal/
   skills/                -- agent config scanner
 ```
 
+## Roadmap
+
+- **`ancc context`** — unified token budget overview. Show per-agent config overhead as a percentage of context window. One command, full visibility.
+- **Token budget warnings in audit** — warn when config tokens exceed 10% of context window, flag individual skills over 2,000 tokens.
+- **More agents** — Windsurf, Aider, Continue, Copilot Workspace. Same scanner pattern, one at a time.
+- **`ancc diff`** — compare agent configs between two directories. Show what's different, what's missing, what's changed.
+- **CI integration** — GitHub Action (`ppiankov/ancc-action`) to validate on PRs. Badge generation via `--badge` flag.
+
 ## Known limitations
 
 - Static validation only — does not install or execute the target tool
