@@ -10,6 +10,7 @@ import (
 func newValidateCmd() *cobra.Command {
 	var format string
 	var verbose bool
+	var badge bool
 
 	cmd := &cobra.Command{
 		Use:   "validate [path]",
@@ -29,11 +30,14 @@ func newValidateCmd() *cobra.Command {
 			w := cmd.OutOrStdout()
 			switch format {
 			case "json":
-				if err := formatJSON(w, result); err != nil {
+				if err := formatValidateJSON(w, result, badge); err != nil {
 					return fmt.Errorf("formatting output: %w", err)
 				}
 			default:
 				formatText(w, result, verbose)
+				if badge {
+					_, _ = fmt.Fprintf(w, "  Badge: ![ANCC](%s)\n", badgeURL(result.Status))
+				}
 			}
 
 			switch result.Status {
@@ -51,6 +55,7 @@ func newValidateCmd() *cobra.Command {
 
 	cmd.Flags().StringVar(&format, "format", "text", "output format (text, json)")
 	cmd.Flags().BoolVar(&verbose, "verbose", false, "show all checks including passing")
+	cmd.Flags().BoolVar(&badge, "badge", false, "include shields.io badge URL")
 
 	return cmd
 }

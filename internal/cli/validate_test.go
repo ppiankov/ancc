@@ -97,6 +97,71 @@ func TestValidateCmd_ExitCode2_WarnOnly(t *testing.T) {
 	}
 }
 
+func TestValidateCmd_Badge(t *testing.T) {
+	cmd := newRootCmd("dev")
+	buf := new(bytes.Buffer)
+	cmd.SetOut(buf)
+	cmd.SetArgs([]string{"validate", "--badge", repoRoot()})
+
+	err := cmd.Execute()
+	var exitErr *ExitError
+	if err != nil && !errors.As(err, &exitErr) {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	output := buf.String()
+	if !strings.Contains(output, "img.shields.io/badge/ANCC") {
+		t.Errorf("expected badge URL in output, got:\n%s", output)
+	}
+	if !strings.Contains(output, "Badge:") {
+		t.Errorf("expected 'Badge:' label in output, got:\n%s", output)
+	}
+}
+
+func TestValidateCmd_BadgeJSON(t *testing.T) {
+	cmd := newRootCmd("dev")
+	buf := new(bytes.Buffer)
+	cmd.SetOut(buf)
+	cmd.SetArgs([]string{"validate", "--badge", "--format", "json", repoRoot()})
+
+	err := cmd.Execute()
+	var exitErr *ExitError
+	if err != nil && !errors.As(err, &exitErr) {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	var parsed struct {
+		BadgeURL string `json:"badge_url"`
+		Status   string `json:"status"`
+	}
+	if err := json.Unmarshal(buf.Bytes(), &parsed); err != nil {
+		t.Fatalf("invalid JSON: %v\nraw: %s", err, buf.String())
+	}
+	if parsed.BadgeURL == "" {
+		t.Error("expected non-empty badge_url")
+	}
+	if !strings.Contains(parsed.BadgeURL, "img.shields.io") {
+		t.Errorf("badge_url = %q, expected shields.io URL", parsed.BadgeURL)
+	}
+}
+
+func TestBadgeURL(t *testing.T) {
+	tests := []struct {
+		status string
+		want   string
+	}{
+		{"pass", "brightgreen"},
+		{"partial", "yellow"},
+		{"fail", "red"},
+	}
+	for _, tt := range tests {
+		got := badgeURL(tt.status)
+		if !strings.Contains(got, tt.want) {
+			t.Errorf("badgeURL(%q) = %q, want color %q", tt.status, got, tt.want)
+		}
+	}
+}
+
 func TestValidateCmd_Help(t *testing.T) {
 	cmd := newRootCmd("dev")
 	buf := new(bytes.Buffer)

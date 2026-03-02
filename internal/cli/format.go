@@ -66,3 +66,32 @@ func formatJSON(w io.Writer, result *validator.ValidationResult) error {
 	enc.SetIndent("", "  ")
 	return enc.Encode(result)
 }
+
+// validateResultWithBadge wraps ValidationResult with a badge URL for JSON output.
+type validateResultWithBadge struct {
+	*validator.ValidationResult
+	BadgeURL string `json:"badge_url"`
+}
+
+func formatValidateJSON(w io.Writer, result *validator.ValidationResult, badge bool) error {
+	enc := json.NewEncoder(w)
+	enc.SetIndent("", "  ")
+	if !badge {
+		return enc.Encode(result)
+	}
+	return enc.Encode(validateResultWithBadge{
+		ValidationResult: result,
+		BadgeURL:         badgeURL(result.Status),
+	})
+}
+
+func badgeURL(status string) string {
+	switch status {
+	case validator.OverallPass:
+		return "https://img.shields.io/badge/ANCC-pass-brightgreen"
+	case validator.OverallPartial:
+		return "https://img.shields.io/badge/ANCC-partial-yellow"
+	default:
+		return "https://img.shields.io/badge/ANCC-fail-red"
+	}
+}

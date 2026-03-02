@@ -1,0 +1,36 @@
+name: ANCC Validation
+description: Validate repos against the Agent-Native CLI Convention
+branding:
+  icon: check-circle
+  color: green
+
+inputs:
+  checks:
+    description: Comma-separated checks to run (validate, skills, audit)
+    default: validate
+  fail-on-warn:
+    description: Treat warnings as failures
+    default: 'false'
+  version:
+    description: ancc version to install (default latest)
+    default: latest
+
+outputs:
+  status:
+    description: Validation status (pass, fail, partial)
+    value: ${{ steps.run.outputs.status }}
+  summary:
+    description: Human-readable result summary
+    value: ${{ steps.run.outputs.summary }}
+
+runs:
+  using: composite
+  steps:
+    - name: Install ancc
+      shell: bash
+      run: ${{ github.action_path }}/entrypoint.sh install "${{ inputs.version }}"
+
+    - name: Run checks
+      id: run
+      shell: bash
+      run: ${{ github.action_path }}/entrypoint.sh run "${{ inputs.checks }}" "${{ inputs.fail-on-warn }}"
