@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 // fileBytes returns the size of a single file in bytes, or 0 on error.
@@ -137,6 +138,39 @@ func parseClaudeSettings(path string) (hooks, mcp int, found bool) {
 	return hooks, mcp, true
 }
 
+// parseCodexTOMLMCP counts [mcp_servers.*] table sections in a Codex config.toml.
+func parseCodexTOMLMCP(path string) int {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return 0
+	}
+	count := 0
+	for _, line := range strings.Split(string(data), "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "[mcp_servers.") && strings.HasSuffix(line, "]") && !strings.HasPrefix(line, "[[") {
+			count++
+		}
+	}
+	return count
+}
+
+// parseOpenCodeJSON reads an opencode.json and returns instruction count, MCP count, byte size, and whether the file exists.
+func parseOpenCodeJSON(path string) (instructions, mcp int, bytes int64, found bool) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return 0, 0, 0, false
+	}
+	b := fileBytes(path)
+	var cfg struct {
+		MCP          map[string]json.RawMessage `json:"mcp"`
+		Instructions []json.RawMessage          `json:"instructions"`
+	}
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		return 0, 0, b, true
+	}
+	return len(cfg.Instructions), len(cfg.MCP), b, true
+}
+
 // parseMCPServers reads a JSON file and counts entries under "mcpServers".
 func parseMCPServers(path string) int {
 	data, err := os.ReadFile(path)
@@ -255,40 +289,60 @@ func scanCursor(projectDir, homeDir string) AgentResult {
 	return r
 }
 
-func scanOpenCode(_ string, homeDir string) AgentResult {
+func scanOpenCode(projectDir, homeDir string) AgentResult {
 	r := AgentResult{Name: AgentOpenCode, Advisory: true}
+	var totalBytes int64
 
-	if homeDir == "" {
-		return r
+	if homeDir != "" {
+		instructions, mcp, b, found := parseOpenCodeJSON(filepath.Join(homeDir, ".config", "opencode", "opencode.json"))
+		if found {
+			r.Skills += instructions
+			r.MCP += mcp
+			totalBytes += b
+			r.Sources = append(r.Sources, "~/.config/opencode/ (advisory)")
+		}
 	}
 
-	cfgPath := filepath.Join(homeDir, ".config", "opencode", "opencode.json")
-	data, err := os.ReadFile(cfgPath)
-	if err != nil {
-		return r
+	instructions, mcp, b, found := parseOpenCodeJSON(filepath.Join(projectDir, "opencode.json"))
+	if found {
+		r.Skills += instructions
+		r.MCP += mcp
+		totalBytes += b
+		r.Sources = append(r.Sources, "opencode.json (advisory)")
 	}
 
-	r.Sources = append(r.Sources, "~/.config/opencode/ (advisory)")
-
-	var cfg struct {
-		MCP          map[string]json.RawMessage `json:"mcp"`
-		Instructions []json.RawMessage          `json:"instructions"`
-	}
-	if err := json.Unmarshal(data, &cfg); err != nil {
-		r.Tokens = bytesToTokens(fileBytes(cfgPath))
-		return r
-	}
-
-	r.Skills = len(cfg.Instructions)
-	r.MCP = len(cfg.MCP)
-
-	r.Tokens = bytesToTokens(fileBytes(cfgPath))
+	r.Tokens = bytesToTokens(totalBytes)
 	return r
 }
 
-func scanCodex(projectDir, _ string) AgentResult {
+func scanCodex(projectDir, homeDir string) AgentResult {
 	r := AgentResult{Name: AgentCodex, Advisory: true}
 	var bytes int64
+
+	if homeDir != "" {
+		homeAgents := filepath.Join(homeDir, ".codex", "AGENTS.md")
+		if _, err := os.Stat(homeAgents); err == nil {
+			r.Skills++
+			r.Sources = append(r.Sources, "~/.codex/AGENTS.md (advisory)")
+		}
+		bytes += fileBytes(homeAgents)
+
+		homeSkillsDir := filepath.Join(homeDir, ".codex", "skills")
+		homeSkillCount := countSkillDirs(homeSkillsDir)
+		r.Skills += homeSkillCount
+		if homeSkillCount > 0 {
+			r.Sources = append(r.Sources, "~/.codex/skills/ (advisory)")
+		}
+		bytes += dirBytesRecursive(homeSkillsDir)
+
+		configPath := filepath.Join(homeDir, ".codex", "config.toml")
+		mcpCount := parseCodexTOMLMCP(configPath)
+		if mcpCount > 0 {
+			r.MCP += mcpCount
+			r.Sources = append(r.Sources, "~/.codex/config.toml (advisory)")
+		}
+		bytes += fileBytes(configPath)
+	}
 
 	agentsPath := filepath.Join(projectDir, "AGENTS.md")
 	if _, err := os.Stat(agentsPath); err == nil {

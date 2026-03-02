@@ -403,6 +403,111 @@ func TestScanCursor_WithMDC(t *testing.T) {
 	}
 }
 
+// --- parseCodexTOMLMCP ---
+
+func TestParseCodexTOMLMCP_WithServers(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.toml")
+	content := `model = "gpt-5.3-codex"
+
+[mcp_servers.pastewatch]
+command = "pastewatch-cli"
+args = ["mcp"]
+enabled = true
+
+[mcp_servers.filesystem]
+command = "fs-server"
+enabled = true
+`
+	writeTestFile(t, path, content)
+
+	if got := parseCodexTOMLMCP(path); got != 2 {
+		t.Errorf("got %d, want 2", got)
+	}
+}
+
+func TestParseCodexTOMLMCP_NoServers(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.toml")
+	writeTestFile(t, path, `model = "gpt-5.3-codex"`)
+
+	if got := parseCodexTOMLMCP(path); got != 0 {
+		t.Errorf("got %d, want 0", got)
+	}
+}
+
+func TestParseCodexTOMLMCP_Missing(t *testing.T) {
+	if got := parseCodexTOMLMCP("/nonexistent/config.toml"); got != 0 {
+		t.Errorf("got %d, want 0", got)
+	}
+}
+
+func TestParseCodexTOMLMCP_IgnoresArrayTables(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.toml")
+	content := `[mcp_servers.real]
+command = "srv"
+
+[[mcp_servers.fake]]
+command = "not-a-table"
+`
+	writeTestFile(t, path, content)
+
+	if got := parseCodexTOMLMCP(path); got != 1 {
+		t.Errorf("got %d, want 1 (array table should be ignored)", got)
+	}
+}
+
+// --- parseOpenCodeJSON ---
+
+func TestParseOpenCodeJSON_Valid(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "opencode.json")
+	cfg := map[string]interface{}{
+		"instructions": []interface{}{"AGENTS.md", "README.md"},
+		"mcp": map[string]interface{}{
+			"server1": map[string]interface{}{"type": "local"},
+		},
+	}
+	data, _ := json.Marshal(cfg)
+	writeTestFile(t, path, string(data))
+
+	instructions, mcp, b, found := parseOpenCodeJSON(path)
+	if !found {
+		t.Fatal("expected found=true")
+	}
+	if instructions != 2 {
+		t.Errorf("instructions = %d, want 2", instructions)
+	}
+	if mcp != 1 {
+		t.Errorf("mcp = %d, want 1", mcp)
+	}
+	if b == 0 {
+		t.Error("expected non-zero bytes")
+	}
+}
+
+func TestParseOpenCodeJSON_Missing(t *testing.T) {
+	_, _, _, found := parseOpenCodeJSON("/nonexistent")
+	if found {
+		t.Error("expected found=false")
+	}
+}
+
+func TestParseOpenCodeJSON_Malformed(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "opencode.json")
+	writeTestFile(t, path, "not json")
+
+	_, _, b, found := parseOpenCodeJSON(path)
+	if !found {
+		t.Error("expected found=true for existing file")
+	}
+	if b == 0 {
+		t.Error("expected non-zero bytes for existing file")
+	}
+}
+
 // --- scanOpenCode ---
 
 func TestScanOpenCode_NoConfig(t *testing.T) {
@@ -415,7 +520,7 @@ func TestScanOpenCode_NoConfig(t *testing.T) {
 	}
 }
 
-func TestScanOpenCode_WithConfig(t *testing.T) {
+func TestScanOpenCode_WithHomeConfig(t *testing.T) {
 	home := t.TempDir()
 	cfg := map[string]interface{}{
 		"instructions": []interface{}{"AGENTS.md", "README.md"},
@@ -432,6 +537,57 @@ func TestScanOpenCode_WithConfig(t *testing.T) {
 	}
 	if r.MCP != 1 {
 		t.Errorf("mcp = %d, want 1", r.MCP)
+	}
+}
+
+func TestScanOpenCode_WithProjectConfig(t *testing.T) {
+	proj := t.TempDir()
+	cfg := map[string]interface{}{
+		"instructions": []interface{}{"AGENTS.md"},
+		"mcp": map[string]interface{}{
+			"pastewatch": map[string]interface{}{"type": "local"},
+		},
+	}
+	data, _ := json.Marshal(cfg)
+	writeTestFile(t, filepath.Join(proj, "opencode.json"), string(data))
+
+	r := scanOpenCode(proj, t.TempDir())
+	if r.Skills != 1 {
+		t.Errorf("skills = %d, want 1", r.Skills)
+	}
+	if r.MCP != 1 {
+		t.Errorf("mcp = %d, want 1", r.MCP)
+	}
+}
+
+func TestScanOpenCode_HomeAndProject(t *testing.T) {
+	home := t.TempDir()
+	proj := t.TempDir()
+
+	homeCfg := map[string]interface{}{
+		"instructions": []interface{}{"AGENTS.md"},
+		"mcp": map[string]interface{}{
+			"pastewatch": map[string]interface{}{"type": "local"},
+		},
+	}
+	data, _ := json.Marshal(homeCfg)
+	writeTestFile(t, filepath.Join(home, ".config", "opencode", "opencode.json"), string(data))
+
+	projCfg := map[string]interface{}{
+		"instructions": []interface{}{"README.md"},
+	}
+	data, _ = json.Marshal(projCfg)
+	writeTestFile(t, filepath.Join(proj, "opencode.json"), string(data))
+
+	r := scanOpenCode(proj, home)
+	if r.Skills != 2 { // 1 home + 1 project
+		t.Errorf("skills = %d, want 2", r.Skills)
+	}
+	if r.MCP != 1 { // only from home
+		t.Errorf("mcp = %d, want 1", r.MCP)
+	}
+	if len(r.Sources) != 2 {
+		t.Errorf("sources = %d, want 2", len(r.Sources))
 	}
 }
 
@@ -465,6 +621,92 @@ func TestScanCodex_WithCodexDir(t *testing.T) {
 	r := scanCodex(proj, "")
 	if r.Skills != 2 {
 		t.Errorf("skills = %d, want 2 (AGENTS.md + config.json)", r.Skills)
+	}
+}
+
+func TestScanCodex_HomeAgentsMD(t *testing.T) {
+	home := t.TempDir()
+	proj := t.TempDir()
+	writeTestFile(t, filepath.Join(home, ".codex", "AGENTS.md"), "# Global agent instructions")
+
+	r := scanCodex(proj, home)
+	if r.Skills != 1 {
+		t.Errorf("skills = %d, want 1 (home AGENTS.md)", r.Skills)
+	}
+}
+
+func TestScanCodex_HomeSkills(t *testing.T) {
+	home := t.TempDir()
+	proj := t.TempDir()
+	mkdirAll(t, filepath.Join(home, ".codex", "skills", "commit"))
+	mkdirAll(t, filepath.Join(home, ".codex", "skills", "review"))
+	mkdirAll(t, filepath.Join(home, ".codex", "skills", "ship"))
+
+	r := scanCodex(proj, home)
+	if r.Skills != 3 {
+		t.Errorf("skills = %d, want 3 (home skill dirs)", r.Skills)
+	}
+}
+
+func TestScanCodex_HomeMCP(t *testing.T) {
+	home := t.TempDir()
+	proj := t.TempDir()
+	content := `model = "gpt-5.3-codex"
+
+[mcp_servers.pastewatch]
+command = "pastewatch-cli"
+enabled = true
+
+[mcp_servers.filesystem]
+command = "fs-server"
+`
+	writeTestFile(t, filepath.Join(home, ".codex", "config.toml"), content)
+
+	r := scanCodex(proj, home)
+	if r.MCP != 2 {
+		t.Errorf("mcp = %d, want 2", r.MCP)
+	}
+}
+
+func TestScanCodex_HomeAndProject(t *testing.T) {
+	home := t.TempDir()
+	proj := t.TempDir()
+
+	// Home: AGENTS.md + 2 skills + 1 MCP
+	writeTestFile(t, filepath.Join(home, ".codex", "AGENTS.md"), "# Global agents")
+	mkdirAll(t, filepath.Join(home, ".codex", "skills", "commit"))
+	mkdirAll(t, filepath.Join(home, ".codex", "skills", "review"))
+	writeTestFile(t, filepath.Join(home, ".codex", "config.toml"), "[mcp_servers.pw]\ncommand = \"pw\"\n")
+
+	// Project: AGENTS.md + 1 .codex file
+	writeTestFile(t, filepath.Join(proj, "AGENTS.md"), "# Project agents")
+	writeTestFile(t, filepath.Join(proj, ".codex", "config.toml"), "doc = true")
+
+	r := scanCodex(proj, home)
+	// 1 home AGENTS.md + 2 home skills + 1 project AGENTS.md + 1 .codex file = 5
+	if r.Skills != 5 {
+		t.Errorf("skills = %d, want 5", r.Skills)
+	}
+	if r.MCP != 1 {
+		t.Errorf("mcp = %d, want 1", r.MCP)
+	}
+}
+
+func TestScanCodex_HomeSymlinkedSkills(t *testing.T) {
+	home := t.TempDir()
+	proj := t.TempDir()
+	target := t.TempDir()
+
+	mkdirAll(t, filepath.Join(target, "commit"))
+	skillsDir := filepath.Join(home, ".codex", "skills")
+	mkdirAll(t, skillsDir)
+	if err := os.Symlink(filepath.Join(target, "commit"), filepath.Join(skillsDir, "commit")); err != nil {
+		t.Skip("symlinks not supported:", err)
+	}
+
+	r := scanCodex(proj, home)
+	if r.Skills != 1 {
+		t.Errorf("skills = %d, want 1 (symlinked)", r.Skills)
 	}
 }
 
@@ -673,12 +915,15 @@ func TestScanCursor_Tokens(t *testing.T) {
 }
 
 func TestScanCodex_Tokens(t *testing.T) {
+	home := t.TempDir()
 	proj := t.TempDir()
 	writeTestFile(t, filepath.Join(proj, "AGENTS.md"), strings.Repeat("a", 120))
+	writeTestFile(t, filepath.Join(home, ".codex", "AGENTS.md"), strings.Repeat("b", 80))
 
-	r := scanCodex(proj, "")
-	if r.Tokens != 30 { // 120 / 4
-		t.Errorf("tokens = %d, want 30", r.Tokens)
+	r := scanCodex(proj, home)
+	// 120 (project AGENTS.md) + 80 (home AGENTS.md) = 200 bytes / 4 = 50
+	if r.Tokens != 50 {
+		t.Errorf("tokens = %d, want 50", r.Tokens)
 	}
 }
 
