@@ -426,3 +426,124 @@ func scanOpenClaw(_ string, homeDir string) AgentResult {
 	r.Tokens = bytesToTokens(bytes)
 	return r
 }
+
+func scanWindsurf(projectDir, homeDir string) AgentResult {
+	r := AgentResult{Name: AgentWindsurf}
+	var bytes int64
+
+	// Project: .windsurfrules (single file).
+	rulesFile := filepath.Join(projectDir, ".windsurfrules")
+	if fb := fileBytes(rulesFile); fb > 0 {
+		r.Skills++
+		r.Sources = append(r.Sources, ".windsurfrules")
+		bytes += fb
+	}
+
+	// Project: .windsurf/rules/ (directory of rule files).
+	projRulesDir := filepath.Join(projectDir, ".windsurf", "rules")
+	projCount := countFiles(projRulesDir)
+	if projCount > 0 {
+		r.Skills += projCount
+		r.Sources = append(r.Sources, ".windsurf/rules/")
+	}
+	bytes += dirBytes(projRulesDir)
+
+	if homeDir != "" {
+		// Global: ~/.windsurf/rules/.
+		homeRulesDir := filepath.Join(homeDir, ".windsurf", "rules")
+		homeCount := countFiles(homeRulesDir)
+		if homeCount > 0 {
+			r.Skills += homeCount
+			r.Sources = append(r.Sources, "~/.windsurf/rules/")
+		}
+		bytes += dirBytes(homeRulesDir)
+
+		// MCP: ~/.codeium/windsurf/mcp_config.json.
+		mcpPath := filepath.Join(homeDir, ".codeium", "windsurf", "mcp_config.json")
+		mcpCount := parseMCPServers(mcpPath)
+		if mcpCount > 0 {
+			r.MCP += mcpCount
+			r.Sources = append(r.Sources, "~/.codeium/windsurf/mcp_config.json")
+		}
+		bytes += fileBytes(mcpPath)
+	}
+
+	r.Tokens = bytesToTokens(bytes)
+	return r
+}
+
+func scanAider(projectDir, homeDir string) AgentResult {
+	r := AgentResult{Name: AgentAider, Advisory: true}
+	var bytes int64
+
+	// Project: .aider.conf.yml.
+	projConf := filepath.Join(projectDir, ".aider.conf.yml")
+	if fb := fileBytes(projConf); fb > 0 {
+		r.Skills++
+		r.Sources = append(r.Sources, ".aider.conf.yml (advisory)")
+		bytes += fb
+	}
+
+	if homeDir != "" {
+		// Global: ~/.aider.conf.yml.
+		homeConf := filepath.Join(homeDir, ".aider.conf.yml")
+		if fb := fileBytes(homeConf); fb > 0 {
+			r.Skills++
+			r.Sources = append(r.Sources, "~/.aider.conf.yml (advisory)")
+			bytes += fb
+		}
+	}
+
+	r.Tokens = bytesToTokens(bytes)
+	return r
+}
+
+func scanContinue(projectDir, homeDir string) AgentResult {
+	r := AgentResult{Name: AgentContinue, Advisory: true}
+	var bytes int64
+
+	if homeDir != "" {
+		// Global: ~/.continue/config.yaml.
+		yamlConf := filepath.Join(homeDir, ".continue", "config.yaml")
+		if fb := fileBytes(yamlConf); fb > 0 {
+			r.Skills++
+			r.Sources = append(r.Sources, "~/.continue/config.yaml (advisory)")
+			bytes += fb
+		}
+
+		// Global: ~/.continue/config.json (deprecated).
+		jsonConf := filepath.Join(homeDir, ".continue", "config.json")
+		if fb := fileBytes(jsonConf); fb > 0 {
+			r.Skills++
+			r.Sources = append(r.Sources, "~/.continue/config.json (advisory)")
+			bytes += fb
+		}
+	}
+
+	// Project: .continuerc.json.
+	projConf := filepath.Join(projectDir, ".continuerc.json")
+	if fb := fileBytes(projConf); fb > 0 {
+		r.Skills++
+		r.Sources = append(r.Sources, ".continuerc.json (advisory)")
+		bytes += fb
+	}
+
+	r.Tokens = bytesToTokens(bytes)
+	return r
+}
+
+func scanCopilot(projectDir, _ string) AgentResult {
+	r := AgentResult{Name: AgentCopilot}
+	var bytes int64
+
+	// Project: .github/copilot-instructions.md.
+	instrFile := filepath.Join(projectDir, ".github", "copilot-instructions.md")
+	if fb := fileBytes(instrFile); fb > 0 {
+		r.Skills++
+		r.Sources = append(r.Sources, ".github/copilot-instructions.md")
+		bytes += fb
+	}
+
+	r.Tokens = bytesToTokens(bytes)
+	return r
+}

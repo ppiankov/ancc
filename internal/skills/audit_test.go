@@ -676,6 +676,156 @@ func TestFormatK(t *testing.T) {
 	}
 }
 
+// --- auditWindsurf ---
+
+func TestAuditWindsurf_WithRules(t *testing.T) {
+	proj := t.TempDir()
+	home := t.TempDir()
+	writeTestFile(t, filepath.Join(proj, ".windsurf", "rules", "rule.md"), "project rule")
+	writeTestFile(t, filepath.Join(home, ".windsurf", "rules", "global.md"), "global rule")
+
+	env := testAuditEnv()
+	a := auditWindsurf(proj, home, env)
+	if len(a.Entries) != 2 {
+		t.Errorf("entries = %d, want 2", len(a.Entries))
+	}
+	for _, e := range a.Entries {
+		if e.Status != AuditOK {
+			t.Errorf("entry %s: status = %s, want ok", e.Name, e.Status)
+		}
+	}
+}
+
+func TestAuditWindsurf_WithMCP(t *testing.T) {
+	proj := t.TempDir()
+	home := t.TempDir()
+	cfg := map[string]interface{}{
+		"mcpServers": map[string]interface{}{
+			"srv": map[string]interface{}{"command": "my-mcp-srv"},
+		},
+	}
+	data, _ := json.Marshal(cfg)
+	writeTestFile(t, filepath.Join(home, ".codeium", "windsurf", "mcp_config.json"), string(data))
+
+	env := testAuditEnv("my-mcp-srv")
+	a := auditWindsurf(proj, home, env)
+
+	var found bool
+	for _, e := range a.Entries {
+		if e.Category == "mcp" && e.Name == "srv" && e.Status == AuditOK {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("expected MCP audit entry for srv")
+	}
+}
+
+func TestAuditWindsurf_NoConfig(t *testing.T) {
+	env := testAuditEnv()
+	a := auditWindsurf(t.TempDir(), t.TempDir(), env)
+	if len(a.Entries) != 0 {
+		t.Errorf("entries = %d, want 0", len(a.Entries))
+	}
+}
+
+// --- auditAider ---
+
+func TestAuditAider_WithConfig(t *testing.T) {
+	proj := t.TempDir()
+	home := t.TempDir()
+	writeTestFile(t, filepath.Join(proj, ".aider.conf.yml"), "model: gpt-4")
+	writeTestFile(t, filepath.Join(home, ".aider.conf.yml"), "model: claude")
+
+	env := testAuditEnv()
+	a := auditAider(proj, home, env)
+	if len(a.Entries) != 2 {
+		t.Errorf("entries = %d, want 2", len(a.Entries))
+	}
+	for _, e := range a.Entries {
+		if e.Status != AuditOK {
+			t.Errorf("entry %s: status = %s, want ok", e.Name, e.Status)
+		}
+	}
+}
+
+func TestAuditAider_NoConfig(t *testing.T) {
+	env := testAuditEnv()
+	a := auditAider(t.TempDir(), t.TempDir(), env)
+	if len(a.Entries) != 0 {
+		t.Errorf("entries = %d, want 0", len(a.Entries))
+	}
+}
+
+// --- auditContinue ---
+
+func TestAuditContinue_WithConfig(t *testing.T) {
+	home := t.TempDir()
+	proj := t.TempDir()
+	writeTestFile(t, filepath.Join(home, ".continue", "config.yaml"), "models: []")
+	writeTestFile(t, filepath.Join(proj, ".continuerc.json"), "{}")
+
+	env := testAuditEnv()
+	a := auditContinue(proj, home, env)
+	if len(a.Entries) != 2 {
+		t.Errorf("entries = %d, want 2", len(a.Entries))
+	}
+	for _, e := range a.Entries {
+		if e.Status != AuditOK {
+			t.Errorf("entry %s: status = %s, want ok", e.Name, e.Status)
+		}
+	}
+}
+
+func TestAuditContinue_DeprecatedJSON(t *testing.T) {
+	home := t.TempDir()
+	writeTestFile(t, filepath.Join(home, ".continue", "config.json"), "{}")
+
+	env := testAuditEnv()
+	a := auditContinue(t.TempDir(), home, env)
+	if len(a.Entries) != 1 {
+		t.Fatalf("entries = %d, want 1", len(a.Entries))
+	}
+	if a.Entries[0].Status != AuditWarn {
+		t.Errorf("status = %s, want warn (deprecated)", a.Entries[0].Status)
+	}
+}
+
+func TestAuditContinue_NoConfig(t *testing.T) {
+	env := testAuditEnv()
+	a := auditContinue(t.TempDir(), t.TempDir(), env)
+	if len(a.Entries) != 0 {
+		t.Errorf("entries = %d, want 0", len(a.Entries))
+	}
+}
+
+// --- auditCopilot ---
+
+func TestAuditCopilot_WithInstructions(t *testing.T) {
+	proj := t.TempDir()
+	writeTestFile(t, filepath.Join(proj, ".github", "copilot-instructions.md"), "# Instructions\nUse Go.")
+
+	env := testAuditEnv()
+	a := auditCopilot(proj, "", env)
+	if len(a.Entries) != 1 {
+		t.Fatalf("entries = %d, want 1", len(a.Entries))
+	}
+	if a.Entries[0].Status != AuditOK {
+		t.Errorf("status = %s, want ok", a.Entries[0].Status)
+	}
+	if a.Entries[0].Name != "copilot-instructions.md" {
+		t.Errorf("name = %q, want %q", a.Entries[0].Name, "copilot-instructions.md")
+	}
+}
+
+func TestAuditCopilot_NoConfig(t *testing.T) {
+	env := testAuditEnv()
+	a := auditCopilot(t.TempDir(), "", env)
+	if len(a.Entries) != 0 {
+		t.Errorf("entries = %d, want 0", len(a.Entries))
+	}
+}
+
 func TestAuditWithHome_SummaryCount(t *testing.T) {
 	home := t.TempDir()
 	proj := t.TempDir()

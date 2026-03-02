@@ -1054,6 +1054,269 @@ func TestScanWithHome_AgentTokens(t *testing.T) {
 	}
 }
 
+// --- scanWindsurf ---
+
+func TestScanWindsurf_NoConfig(t *testing.T) {
+	r := scanWindsurf(t.TempDir(), t.TempDir())
+	if r.Skills != 0 || r.MCP != 0 {
+		t.Errorf("expected zeros, got skills=%d mcp=%d", r.Skills, r.MCP)
+	}
+	if r.Advisory {
+		t.Error("expected advisory=false")
+	}
+}
+
+func TestScanWindsurf_WithRulesFile(t *testing.T) {
+	proj := t.TempDir()
+	writeTestFile(t, filepath.Join(proj, ".windsurfrules"), "project rules")
+
+	r := scanWindsurf(proj, "")
+	if r.Skills != 1 {
+		t.Errorf("skills = %d, want 1", r.Skills)
+	}
+	if len(r.Sources) != 1 || r.Sources[0] != ".windsurfrules" {
+		t.Errorf("sources = %v, want [.windsurfrules]", r.Sources)
+	}
+}
+
+func TestScanWindsurf_WithRulesDir(t *testing.T) {
+	proj := t.TempDir()
+	writeTestFile(t, filepath.Join(proj, ".windsurf", "rules", "a.md"), "rule a")
+	writeTestFile(t, filepath.Join(proj, ".windsurf", "rules", "b.md"), "rule b")
+
+	r := scanWindsurf(proj, "")
+	if r.Skills != 2 {
+		t.Errorf("skills = %d, want 2", r.Skills)
+	}
+}
+
+func TestScanWindsurf_HomeRules(t *testing.T) {
+	home := t.TempDir()
+	proj := t.TempDir()
+	writeTestFile(t, filepath.Join(home, ".windsurf", "rules", "global.md"), "global rule")
+
+	r := scanWindsurf(proj, home)
+	if r.Skills != 1 {
+		t.Errorf("skills = %d, want 1", r.Skills)
+	}
+}
+
+func TestScanWindsurf_MCP(t *testing.T) {
+	home := t.TempDir()
+	proj := t.TempDir()
+	cfg := map[string]interface{}{
+		"mcpServers": map[string]interface{}{
+			"srv1": map[string]interface{}{"command": "srv1"},
+			"srv2": map[string]interface{}{"command": "srv2"},
+		},
+	}
+	data, _ := json.Marshal(cfg)
+	writeTestFile(t, filepath.Join(home, ".codeium", "windsurf", "mcp_config.json"), string(data))
+
+	r := scanWindsurf(proj, home)
+	if r.MCP != 2 {
+		t.Errorf("mcp = %d, want 2", r.MCP)
+	}
+}
+
+func TestScanWindsurf_AllSources(t *testing.T) {
+	home := t.TempDir()
+	proj := t.TempDir()
+
+	writeTestFile(t, filepath.Join(proj, ".windsurfrules"), "project rules")
+	writeTestFile(t, filepath.Join(proj, ".windsurf", "rules", "a.md"), "rule a")
+	writeTestFile(t, filepath.Join(home, ".windsurf", "rules", "global.md"), "global")
+	cfg := map[string]interface{}{
+		"mcpServers": map[string]interface{}{
+			"srv": map[string]interface{}{"command": "srv"},
+		},
+	}
+	data, _ := json.Marshal(cfg)
+	writeTestFile(t, filepath.Join(home, ".codeium", "windsurf", "mcp_config.json"), string(data))
+
+	r := scanWindsurf(proj, home)
+	if r.Skills != 3 { // 1 .windsurfrules + 1 proj rules dir + 1 home rules dir
+		t.Errorf("skills = %d, want 3", r.Skills)
+	}
+	if r.MCP != 1 {
+		t.Errorf("mcp = %d, want 1", r.MCP)
+	}
+	if len(r.Sources) != 4 {
+		t.Errorf("sources = %d, want 4", len(r.Sources))
+	}
+}
+
+func TestScanWindsurf_Tokens(t *testing.T) {
+	proj := t.TempDir()
+	writeTestFile(t, filepath.Join(proj, ".windsurfrules"), strings.Repeat("x", 200))
+
+	r := scanWindsurf(proj, "")
+	if r.Tokens != 50 { // 200 / 4
+		t.Errorf("tokens = %d, want 50", r.Tokens)
+	}
+}
+
+// --- scanAider ---
+
+func TestScanAider_NoConfig(t *testing.T) {
+	r := scanAider(t.TempDir(), "")
+	if r.Skills != 0 {
+		t.Errorf("skills = %d, want 0", r.Skills)
+	}
+	if !r.Advisory {
+		t.Error("expected advisory=true")
+	}
+}
+
+func TestScanAider_ProjectConfig(t *testing.T) {
+	proj := t.TempDir()
+	writeTestFile(t, filepath.Join(proj, ".aider.conf.yml"), "model: gpt-4")
+
+	r := scanAider(proj, "")
+	if r.Skills != 1 {
+		t.Errorf("skills = %d, want 1", r.Skills)
+	}
+}
+
+func TestScanAider_HomeConfig(t *testing.T) {
+	home := t.TempDir()
+	proj := t.TempDir()
+	writeTestFile(t, filepath.Join(home, ".aider.conf.yml"), "model: gpt-4")
+
+	r := scanAider(proj, home)
+	if r.Skills != 1 {
+		t.Errorf("skills = %d, want 1", r.Skills)
+	}
+}
+
+func TestScanAider_HomeAndProject(t *testing.T) {
+	home := t.TempDir()
+	proj := t.TempDir()
+	writeTestFile(t, filepath.Join(home, ".aider.conf.yml"), "model: gpt-4")
+	writeTestFile(t, filepath.Join(proj, ".aider.conf.yml"), "model: claude")
+
+	r := scanAider(proj, home)
+	if r.Skills != 2 {
+		t.Errorf("skills = %d, want 2", r.Skills)
+	}
+	if len(r.Sources) != 2 {
+		t.Errorf("sources = %d, want 2", len(r.Sources))
+	}
+}
+
+func TestScanAider_Tokens(t *testing.T) {
+	proj := t.TempDir()
+	writeTestFile(t, filepath.Join(proj, ".aider.conf.yml"), strings.Repeat("x", 120))
+
+	r := scanAider(proj, "")
+	if r.Tokens != 30 { // 120 / 4
+		t.Errorf("tokens = %d, want 30", r.Tokens)
+	}
+}
+
+// --- scanContinue ---
+
+func TestScanContinue_NoConfig(t *testing.T) {
+	r := scanContinue(t.TempDir(), t.TempDir())
+	if r.Skills != 0 {
+		t.Errorf("skills = %d, want 0", r.Skills)
+	}
+	if !r.Advisory {
+		t.Error("expected advisory=true")
+	}
+}
+
+func TestScanContinue_HomeYAML(t *testing.T) {
+	home := t.TempDir()
+	writeTestFile(t, filepath.Join(home, ".continue", "config.yaml"), "models: []")
+
+	r := scanContinue(t.TempDir(), home)
+	if r.Skills != 1 {
+		t.Errorf("skills = %d, want 1", r.Skills)
+	}
+}
+
+func TestScanContinue_HomeJSON(t *testing.T) {
+	home := t.TempDir()
+	writeTestFile(t, filepath.Join(home, ".continue", "config.json"), "{}")
+
+	r := scanContinue(t.TempDir(), home)
+	if r.Skills != 1 {
+		t.Errorf("skills = %d, want 1", r.Skills)
+	}
+}
+
+func TestScanContinue_ProjectRC(t *testing.T) {
+	proj := t.TempDir()
+	writeTestFile(t, filepath.Join(proj, ".continuerc.json"), "{}")
+
+	r := scanContinue(proj, "")
+	if r.Skills != 1 {
+		t.Errorf("skills = %d, want 1", r.Skills)
+	}
+}
+
+func TestScanContinue_AllSources(t *testing.T) {
+	home := t.TempDir()
+	proj := t.TempDir()
+	writeTestFile(t, filepath.Join(home, ".continue", "config.yaml"), "models: []")
+	writeTestFile(t, filepath.Join(home, ".continue", "config.json"), "{}")
+	writeTestFile(t, filepath.Join(proj, ".continuerc.json"), "{}")
+
+	r := scanContinue(proj, home)
+	if r.Skills != 3 {
+		t.Errorf("skills = %d, want 3", r.Skills)
+	}
+	if len(r.Sources) != 3 {
+		t.Errorf("sources = %d, want 3", len(r.Sources))
+	}
+}
+
+func TestScanContinue_Tokens(t *testing.T) {
+	home := t.TempDir()
+	writeTestFile(t, filepath.Join(home, ".continue", "config.yaml"), strings.Repeat("y", 80))
+
+	r := scanContinue(t.TempDir(), home)
+	if r.Tokens != 20 { // 80 / 4
+		t.Errorf("tokens = %d, want 20", r.Tokens)
+	}
+}
+
+// --- scanCopilot ---
+
+func TestScanCopilot_NoConfig(t *testing.T) {
+	r := scanCopilot(t.TempDir(), "")
+	if r.Skills != 0 {
+		t.Errorf("skills = %d, want 0", r.Skills)
+	}
+	if r.Advisory {
+		t.Error("expected advisory=false")
+	}
+}
+
+func TestScanCopilot_WithInstructions(t *testing.T) {
+	proj := t.TempDir()
+	writeTestFile(t, filepath.Join(proj, ".github", "copilot-instructions.md"), "# Copilot Instructions\nUse Go.")
+
+	r := scanCopilot(proj, "")
+	if r.Skills != 1 {
+		t.Errorf("skills = %d, want 1", r.Skills)
+	}
+	if len(r.Sources) != 1 || r.Sources[0] != ".github/copilot-instructions.md" {
+		t.Errorf("sources = %v, want [.github/copilot-instructions.md]", r.Sources)
+	}
+}
+
+func TestScanCopilot_Tokens(t *testing.T) {
+	proj := t.TempDir()
+	writeTestFile(t, filepath.Join(proj, ".github", "copilot-instructions.md"), strings.Repeat("c", 160))
+
+	r := scanCopilot(proj, "")
+	if r.Tokens != 40 { // 160 / 4
+		t.Errorf("tokens = %d, want 40", r.Tokens)
+	}
+}
+
 func TestScanWithHome_TokensOnlyAgent(t *testing.T) {
 	// A project with only CLAUDE.md and no skills/hooks/MCP should still appear
 	// because it has tokens > 0.

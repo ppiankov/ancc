@@ -113,6 +113,10 @@ func AuditWithHome(projectDir, homeDir string, env *auditEnv) (*AuditResult, err
 		{AgentCodex, auditCodex},
 		{AgentQwen, auditQwen},
 		{AgentOpenClaw, auditOpenClaw},
+		{AgentWindsurf, auditWindsurf},
+		{AgentAider, auditAider},
+		{AgentContinue, auditContinue},
+		{AgentCopilot, auditCopilot},
 	}
 
 	for _, a := range auditors {
@@ -639,6 +643,108 @@ func auditOpenClaw(_ string, homeDir string, env *auditEnv) AgentAudit {
 		a.Entries = append(a.Entries, auditMCPEntries(parseMCPDetails(cfgPath, "mcpServers"), "~/.openclaw/openclaw.json", env)...)
 		mcporterPath := filepath.Join(homeDir, ".openclaw", "config", "mcporter.json")
 		a.Entries = append(a.Entries, auditMCPEntries(parseMCPDetails(mcporterPath, "mcpServers"), "~/.openclaw/config/mcporter.json", env)...)
+	}
+
+	return a
+}
+
+func auditWindsurf(projectDir, homeDir string, env *auditEnv) AgentAudit {
+	a := AgentAudit{Name: AgentWindsurf}
+
+	a.Entries = append(a.Entries, auditSkillFiles(filepath.Join(projectDir, ".windsurf", "rules"), ".windsurf/rules/")...)
+
+	if homeDir != "" {
+		a.Entries = append(a.Entries, auditSkillFiles(filepath.Join(homeDir, ".windsurf", "rules"), "~/.windsurf/rules/")...)
+		mcpPath := filepath.Join(homeDir, ".codeium", "windsurf", "mcp_config.json")
+		a.Entries = append(a.Entries, auditMCPEntries(parseMCPDetails(mcpPath, "mcpServers"), "~/.codeium/windsurf/mcp_config.json", env)...)
+	}
+
+	return a
+}
+
+func auditAider(projectDir, homeDir string, _ *auditEnv) AgentAudit {
+	a := AgentAudit{Name: AgentAider}
+
+	projConf := filepath.Join(projectDir, ".aider.conf.yml")
+	if _, err := os.Stat(projConf); err == nil {
+		a.Entries = append(a.Entries, AuditEntry{
+			Category: "skill",
+			Name:     ".aider.conf.yml",
+			Status:   AuditOK,
+			Message:  "config present",
+			Path:     ".aider.conf.yml",
+		})
+	}
+
+	if homeDir != "" {
+		homeConf := filepath.Join(homeDir, ".aider.conf.yml")
+		if _, err := os.Stat(homeConf); err == nil {
+			a.Entries = append(a.Entries, AuditEntry{
+				Category: "skill",
+				Name:     "~/.aider.conf.yml",
+				Status:   AuditOK,
+				Message:  "config present",
+				Path:     "~/.aider.conf.yml",
+			})
+		}
+	}
+
+	return a
+}
+
+func auditContinue(projectDir, homeDir string, _ *auditEnv) AgentAudit {
+	a := AgentAudit{Name: AgentContinue}
+
+	if homeDir != "" {
+		yamlConf := filepath.Join(homeDir, ".continue", "config.yaml")
+		if _, err := os.Stat(yamlConf); err == nil {
+			a.Entries = append(a.Entries, AuditEntry{
+				Category: "skill",
+				Name:     "config.yaml",
+				Status:   AuditOK,
+				Message:  "config present",
+				Path:     "~/.continue/config.yaml",
+			})
+		}
+
+		jsonConf := filepath.Join(homeDir, ".continue", "config.json")
+		if _, err := os.Stat(jsonConf); err == nil {
+			a.Entries = append(a.Entries, AuditEntry{
+				Category: "skill",
+				Name:     "config.json",
+				Status:   AuditWarn,
+				Message:  "deprecated format (migrate to config.yaml)",
+				Path:     "~/.continue/config.json",
+			})
+		}
+	}
+
+	projConf := filepath.Join(projectDir, ".continuerc.json")
+	if _, err := os.Stat(projConf); err == nil {
+		a.Entries = append(a.Entries, AuditEntry{
+			Category: "skill",
+			Name:     ".continuerc.json",
+			Status:   AuditOK,
+			Message:  "project config present",
+			Path:     ".continuerc.json",
+		})
+	}
+
+	return a
+}
+
+func auditCopilot(projectDir, _ string, _ *auditEnv) AgentAudit {
+	a := AgentAudit{Name: AgentCopilot}
+
+	instrFile := filepath.Join(projectDir, ".github", "copilot-instructions.md")
+	if info, err := os.Stat(instrFile); err == nil {
+		a.Entries = append(a.Entries, AuditEntry{
+			Category: "skill",
+			Name:     "copilot-instructions.md",
+			Status:   AuditOK,
+			Message:  fmt.Sprintf("%d bytes", info.Size()),
+			Path:     ".github/copilot-instructions.md",
+		})
 	}
 
 	return a
