@@ -62,6 +62,40 @@ Creates a template SKILL.md in the current directory with all required sections.
 - 0: SKILL.md created successfully
 - 1: SKILL.md already exists (without --force) or write error
 
+### ancc skills
+
+Scans for agent configurations in a directory. Detects Claude Code, Cline, Cursor, OpenCode, Codex, and Qwen setups.
+
+**Flags:**
+- `--format json` — output as JSON (default: human-readable)
+- `--tokens` — show estimated token counts per agent
+
+**JSON output:**
+```json
+{
+  "path": "/path/to/project",
+  "agents": [
+    {
+      "name": "claude-code",
+      "skills": 26,
+      "hooks": 8,
+      "mcp": 0,
+      "tokens": 3400,
+      "sources": ["~/.claude/settings.json", "~/.claude/skills/"],
+      "advisory": false
+    }
+  ],
+  "total_tokens": 3400,
+  "product": {
+    "path": "/path/to/project/docs/SKILL.md",
+    "name": "mytool"
+  }
+}
+```
+
+**Exit codes:**
+- 0: scan completed
+
 ### ancc doctor
 
 Checks ancc's own health and reports companion tools.
@@ -74,14 +108,16 @@ Checks ancc's own health and reports companion tools.
 {
   "status": "ok | warn | error",
   "checks": [
-    {"name": "go-version", "status": "ok", "message": "go 1.23 found"},
-    {"name": "github-api", "status": "ok", "message": "GitHub API reachable"}
+    {"name": "ancc-version", "status": "ok", "message": "0.2.0"},
+    {"name": "go-available", "status": "ok", "message": "go version go1.24.0 darwin/arm64"},
+    {"name": "github-api", "status": "warn", "message": "GITHUB_TOKEN not set"},
+    {"name": "homebrew", "status": "ok", "message": "brew found"}
   ]
 }
 ```
 
 **Exit codes:**
-- 0: all healthy
+- 0: all healthy or warnings only
 - 1: critical issue found
 
 ### ancc version
@@ -110,4 +146,13 @@ ancc validate . --format json | jq '.summary'
 
 # Use in CI — exit code does the work
 ancc validate . || echo "ANCC validation failed"
+
+# List detected agents
+ancc skills . --format json | jq '.agents[].name'
+
+# Get total context tax (estimated tokens)
+ancc skills --tokens . --format json | jq '.total_tokens'
+
+# Check doctor status
+ancc doctor --format json | jq '.status'
 ```

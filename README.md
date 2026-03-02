@@ -65,6 +65,16 @@ ancc validate .
 ancc validate /path/to/repo
 ancc validate --format json .
 ancc validate --verbose .
+
+ancc init
+ancc init --name mytool --force
+
+ancc skills .
+ancc skills --tokens .
+ancc skills --format json .
+
+ancc doctor
+ancc doctor --format json
 ```
 
 ## Checks
