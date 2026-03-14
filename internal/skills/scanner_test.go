@@ -1341,3 +1341,211 @@ func TestScanWithHome_TokensOnlyAgent(t *testing.T) {
 		t.Error("expected claude-code agent in results (has tokens from CLAUDE.md)")
 	}
 }
+
+// --- resolvePath (symlink resolution) ---
+
+func TestResolvePath_NonExistent(t *testing.T) {
+	// Non-existent path should return original path
+	got := resolvePath("/nonexistent/path/to/dir")
+	if got != "/nonexistent/path/to/dir" {
+		t.Errorf("got %q, want %q", got, "/nonexistent/path/to/dir")
+	}
+}
+
+func TestResolvePath_RegularPath(t *testing.T) {
+	// Regular path without symlinks should resolve to itself or its canonical form
+	// (on macOS, /var resolves to /private/var)
+	dir := t.TempDir()
+	got := resolvePath(dir)
+	// Either the same path or the resolved canonical path is acceptable
+	if got != dir {
+		// Verify it's a valid resolved path by checking it exists
+		if _, err := os.Stat(got); err != nil {
+			t.Errorf("resolved path %q does not exist: %v", got, err)
+		}
+	}
+}
+
+func TestResolvePath_Symlink(t *testing.T) {
+	// Create a target directory
+	target := t.TempDir()
+	writeTestFile(t, filepath.Join(target, "test.txt"), "hello")
+
+	// Create a symlink to the target
+	linkDir := t.TempDir()
+	linkPath := filepath.Join(linkDir, "linked")
+	if err := os.Symlink(target, linkPath); err != nil {
+		t.Skip("symlinks not supported:", err)
+	}
+
+	// resolvePath should return the resolved target path (or its canonical form)
+	got := resolvePath(linkPath)
+	// Resolve target as well to handle platform differences (e.g., /var vs /private/var)
+	targetResolved := resolvePath(target)
+	if got != targetResolved {
+		t.Errorf("got %q, want %q (resolved target: %q)", got, target, targetResolved)
+	}
+}
+
+// --- Symlinked agent config directories ---
+
+func TestScanClaudeCode_SymlinkedHomeSkills(t *testing.T) {
+	home := t.TempDir()
+	proj := t.TempDir()
+	target := t.TempDir()
+
+	// Create real skills in target directory
+	mkdirAll(t, filepath.Join(target, "skill1"))
+	mkdirAll(t, filepath.Join(target, "skill2"))
+
+	// Create symlink: home/.claude/skills -> target
+	skillsDir := filepath.Join(home, ".claude", "skills")
+	mkdirAll(t, filepath.Dir(skillsDir))
+	if err := os.Symlink(target, skillsDir); err != nil {
+		t.Skip("symlinks not supported:", err)
+	}
+
+	r := scanClaudeCode(proj, home)
+	if r.Skills != 2 {
+		t.Errorf("skills = %d, want 2 (symlinked home skills)", r.Skills)
+	}
+}
+
+func TestScanCline_SymlinkedHomeSkills(t *testing.T) {
+	home := t.TempDir()
+	proj := t.TempDir()
+	target := t.TempDir()
+
+	// Create real skills in target
+	mkdirAll(t, filepath.Join(target, "commit"))
+	mkdirAll(t, filepath.Join(target, "review"))
+
+	// Create symlink: home/.cline/skills -> target
+	skillsDir := filepath.Join(home, ".cline", "skills")
+	mkdirAll(t, filepath.Dir(skillsDir))
+	if err := os.Symlink(target, skillsDir); err != nil {
+		t.Skip("symlinks not supported:", err)
+	}
+
+	r := scanCline(proj, home)
+	if r.Skills != 2 {
+		t.Errorf("skills = %d, want 2 (symlinked home skills)", r.Skills)
+	}
+}
+
+func TestScanCline_SymlinkedProjectRules(t *testing.T) {
+	home := t.TempDir()
+	proj := t.TempDir()
+	target := t.TempDir()
+
+	// Create real rules in target
+	writeTestFile(t, filepath.Join(target, "rule1.md"), "rule1")
+	writeTestFile(t, filepath.Join(target, "rule2.md"), "rule2")
+
+	// Create symlink: proj/.clinerules -> target
+	rulesPath := filepath.Join(proj, ".clinerules")
+	if err := os.Symlink(target, rulesPath); err != nil {
+		t.Skip("symlinks not supported:", err)
+	}
+
+	r := scanCline(proj, home)
+	if r.Skills != 2 {
+		t.Errorf("skills = %d, want 2 (symlinked project rules)", r.Skills)
+	}
+}
+
+func TestScanQwen_SymlinkedHomeSkills(t *testing.T) {
+	home := t.TempDir()
+	target := t.TempDir()
+
+	// Create real skills in target
+	mkdirAll(t, filepath.Join(target, "commit"))
+	mkdirAll(t, filepath.Join(target, "review"))
+
+	// Create symlink: home/.qwen/skills -> target
+	skillsDir := filepath.Join(home, ".qwen", "skills")
+	mkdirAll(t, filepath.Dir(skillsDir))
+	if err := os.Symlink(target, skillsDir); err != nil {
+		t.Skip("symlinks not supported:", err)
+	}
+
+	r := scanQwen("", home)
+	if r.Skills != 2 {
+		t.Errorf("skills = %d, want 2 (symlinked home skills)", r.Skills)
+	}
+}
+
+func TestScanOpenCode_SymlinkedHomeConfig(t *testing.T) {
+	home := t.TempDir()
+	target := t.TempDir()
+
+	// Create real config in target
+	cfg := map[string]interface{}{
+		"instructions": []interface{}{"AGENTS.md", "README.md"},
+		"mcp": map[string]interface{}{
+			"server1": map[string]interface{}{"type": "local"},
+		},
+	}
+	data, _ := json.Marshal(cfg)
+	writeTestFile(t, filepath.Join(target, "opencode.json"), string(data))
+
+	// Create symlink: home/.config/opencode -> target
+	opencodeDir := filepath.Join(home, ".config", "opencode")
+	mkdirAll(t, filepath.Dir(opencodeDir))
+	if err := os.Symlink(target, opencodeDir); err != nil {
+		t.Skip("symlinks not supported:", err)
+	}
+
+	r := scanOpenCode(t.TempDir(), home)
+	if r.Skills != 2 {
+		t.Errorf("skills = %d, want 2 (symlinked home config)", r.Skills)
+	}
+	if r.MCP != 1 {
+		t.Errorf("mcp = %d, want 1", r.MCP)
+	}
+}
+
+func TestScanCodex_SymlinkedHomeSkills(t *testing.T) {
+	home := t.TempDir()
+	proj := t.TempDir()
+	target := t.TempDir()
+
+	// Create real skills in target
+	mkdirAll(t, filepath.Join(target, "commit"))
+	mkdirAll(t, filepath.Join(target, "review"))
+	mkdirAll(t, filepath.Join(target, "ship"))
+
+	// Create symlink: home/.codex/skills -> target
+	skillsDir := filepath.Join(home, ".codex", "skills")
+	mkdirAll(t, filepath.Dir(skillsDir))
+	if err := os.Symlink(target, skillsDir); err != nil {
+		t.Skip("symlinks not supported:", err)
+	}
+
+	r := scanCodex(proj, home)
+	if r.Skills != 3 {
+		t.Errorf("skills = %d, want 3 (symlinked home skills)", r.Skills)
+	}
+}
+
+func TestScanCursor_SymlinkedProjectRules(t *testing.T) {
+	proj := t.TempDir()
+	target := t.TempDir()
+
+	// Create real .mdc rules in target
+	writeTestFile(t, filepath.Join(target, "rule1.mdc"), "rule1")
+	writeTestFile(t, filepath.Join(target, "rule2.mdc"), "rule2")
+	writeTestFile(t, filepath.Join(target, "ignore.txt"), "not a rule")
+
+	// Create symlink: proj/.cursor/rules -> target
+	rulesDir := filepath.Join(proj, ".cursor", "rules")
+	mkdirAll(t, filepath.Dir(rulesDir))
+	if err := os.Symlink(target, rulesDir); err != nil {
+		t.Skip("symlinks not supported:", err)
+	}
+
+	r := scanCursor(proj, t.TempDir())
+	if r.Skills != 2 {
+		t.Errorf("skills = %d, want 2 (symlinked project rules)", r.Skills)
+	}
+}
