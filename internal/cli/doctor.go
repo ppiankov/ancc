@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -193,6 +194,9 @@ func checkGitHubAPI(env *doctorEnv) DoctorCheck {
 
 	resp, err := env.httpDo(req)
 	if err != nil {
+		if errors.Is(err, context.Canceled) {
+			return DoctorCheck{Name: "github-api", Status: doctorError, Message: "GitHub API check cancelled"}
+		}
 		return DoctorCheck{Name: "github-api", Status: doctorError, Message: "GitHub API unreachable"}
 	}
 	_ = resp.Body.Close()
