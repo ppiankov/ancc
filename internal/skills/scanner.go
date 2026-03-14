@@ -39,6 +39,7 @@ func ScanWithHome(projectDir, homeDir string) (*ScanResult, error) {
 		scanAider,
 		scanContinue,
 		scanCopilot,
+		scanKilocode,
 	}
 
 	for _, scan := range scanners {

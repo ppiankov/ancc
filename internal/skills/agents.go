@@ -433,6 +433,8 @@ func scanOpenCode(projectDir, homeDir string) AgentResult {
 					return parseOpenCodeJSON(path, r)
 				},
 			},
+			{Path: ".config/opencode/commands", SourcePrefix: "~/", Type: pathTypeDirFiles, Comment: "(advisory)"},
+			{Path: ".config/opencode/skills", SourcePrefix: "~/", Type: pathTypeDirSkills, RecursiveSize: true, Comment: "(advisory)"},
 		},
 		Project: []pathSpec{
 			{
@@ -569,6 +571,27 @@ func scanCopilot(projectDir, homeDir string) AgentResult {
 		ConfigDir: "",
 		Project: []pathSpec{
 			{Path: ".github/copilot-instructions.md", SourcePrefix: "./", Type: pathTypeFile},
+		},
+	}
+	return scanAgentPaths(projectDir, homeDir, spec)
+}
+
+func scanKilocode(projectDir, homeDir string) AgentResult {
+	spec := agentPathSpec{
+		Name:      AgentKilocode,
+		ConfigDir: ".kilocode",
+		Home: []pathSpec{
+			{Path: ".kilocode/skills", SourcePrefix: "~/", Type: pathTypeDirSkills, RecursiveSize: true},
+			{
+				Path: ".config/kilo/opencode.json", SourcePrefix: "~/",
+				Parse: func(path string, r *AgentResult) (bool, int64) {
+					return parseOpenCodeJSON(path, r)
+				},
+			},
+		},
+		Project: []pathSpec{
+			{Path: ".kilocode/rules", SourcePrefix: "./", Type: pathTypeDirFiles},
+			{Path: ".kilocode/skills", SourcePrefix: "./", Type: pathTypeDirSkills, RecursiveSize: true},
 		},
 	}
 	return scanAgentPaths(projectDir, homeDir, spec)

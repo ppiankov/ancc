@@ -591,6 +591,64 @@ func TestScanOpenCode_HomeAndProject(t *testing.T) {
 	}
 }
 
+func TestScanOpenCode_HomeCommands(t *testing.T) {
+	home := t.TempDir()
+	cmdsDir := filepath.Join(home, ".config", "opencode", "commands")
+	mkdirAll(t, cmdsDir)
+	for _, name := range []string{"build.md", "test.md", "lint.md"} {
+		writeTestFile(t, filepath.Join(cmdsDir, name), "command content")
+	}
+
+	r := scanOpenCode(t.TempDir(), home)
+	if r.Skills != 3 {
+		t.Errorf("skills = %d, want 3 (from commands/)", r.Skills)
+	}
+}
+
+func TestScanOpenCode_HomeSkillsDirs(t *testing.T) {
+	home := t.TempDir()
+	skillsDir := filepath.Join(home, ".config", "opencode", "skills")
+	mkdirAll(t, filepath.Join(skillsDir, "review"))
+	mkdirAll(t, filepath.Join(skillsDir, "commit"))
+
+	r := scanOpenCode(t.TempDir(), home)
+	if r.Skills != 2 {
+		t.Errorf("skills = %d, want 2 (from skills/)", r.Skills)
+	}
+}
+
+func TestScanOpenCode_CommandsAndConfig(t *testing.T) {
+	home := t.TempDir()
+
+	// opencode.json with 1 instruction + 1 MCP
+	cfg := map[string]interface{}{
+		"instructions": []interface{}{"AGENTS.md"},
+		"mcp":          map[string]interface{}{"srv": map[string]interface{}{"type": "local"}},
+	}
+	data, _ := json.Marshal(cfg)
+	writeTestFile(t, filepath.Join(home, ".config", "opencode", "opencode.json"), string(data))
+
+	// commands/ with 2 files
+	cmdsDir := filepath.Join(home, ".config", "opencode", "commands")
+	mkdirAll(t, cmdsDir)
+	writeTestFile(t, filepath.Join(cmdsDir, "build.md"), "build")
+	writeTestFile(t, filepath.Join(cmdsDir, "test.md"), "test")
+
+	// skills/ with 1 skill dir
+	mkdirAll(t, filepath.Join(home, ".config", "opencode", "skills", "review"))
+
+	r := scanOpenCode(t.TempDir(), home)
+	if r.Skills != 4 { // 1 instruction + 2 commands + 1 skill dir
+		t.Errorf("skills = %d, want 4 (1 instruction + 2 commands + 1 skill dir)", r.Skills)
+	}
+	if r.MCP != 1 {
+		t.Errorf("mcp = %d, want 1", r.MCP)
+	}
+	if len(r.Sources) != 3 { // opencode.json, commands/, skills/
+		t.Errorf("sources = %d, want 3", len(r.Sources))
+	}
+}
+
 // --- scanCodex ---
 
 func TestScanCodex_NoConfig(t *testing.T) {
@@ -1547,5 +1605,95 @@ func TestScanCursor_SymlinkedProjectRules(t *testing.T) {
 	r := scanCursor(proj, t.TempDir())
 	if r.Skills != 2 {
 		t.Errorf("skills = %d, want 2 (symlinked project rules)", r.Skills)
+	}
+}
+
+// --- scanKilocode ---
+
+func TestScanKilocode_NoConfig(t *testing.T) {
+	r := scanKilocode(t.TempDir(), t.TempDir())
+	if r.Skills != 0 || r.MCP != 0 {
+		t.Errorf("expected zeros, got skills=%d mcp=%d", r.Skills, r.MCP)
+	}
+	if r.Advisory {
+		t.Error("expected advisory=false")
+	}
+}
+
+func TestScanKilocode_HomeSkills(t *testing.T) {
+	home := t.TempDir()
+	mkdirAll(t, filepath.Join(home, ".kilocode", "skills", "commit"))
+	mkdirAll(t, filepath.Join(home, ".kilocode", "skills", "review"))
+
+	r := scanKilocode(t.TempDir(), home)
+	if r.Skills != 2 {
+		t.Errorf("skills = %d, want 2", r.Skills)
+	}
+}
+
+func TestScanKilocode_ProjectRules(t *testing.T) {
+	proj := t.TempDir()
+	rulesDir := filepath.Join(proj, ".kilocode", "rules")
+	mkdirAll(t, rulesDir)
+	writeTestFile(t, filepath.Join(rulesDir, "rule1.md"), "rule one")
+	writeTestFile(t, filepath.Join(rulesDir, "rule2.md"), "rule two")
+
+	r := scanKilocode(proj, t.TempDir())
+	if r.Skills != 2 {
+		t.Errorf("skills = %d, want 2", r.Skills)
+	}
+}
+
+func TestScanKilocode_ProjectSkills(t *testing.T) {
+	proj := t.TempDir()
+	mkdirAll(t, filepath.Join(proj, ".kilocode", "skills", "myskill"))
+
+	r := scanKilocode(proj, t.TempDir())
+	if r.Skills != 1 {
+		t.Errorf("skills = %d, want 1", r.Skills)
+	}
+}
+
+func TestScanKilocode_HomeMCP(t *testing.T) {
+	home := t.TempDir()
+	cfg := map[string]interface{}{
+		"mcp": map[string]interface{}{
+			"server1": map[string]interface{}{"type": "local"},
+		},
+	}
+	data, _ := json.Marshal(cfg)
+	writeTestFile(t, filepath.Join(home, ".config", "kilo", "opencode.json"), string(data))
+
+	r := scanKilocode(t.TempDir(), home)
+	if r.MCP != 1 {
+		t.Errorf("mcp = %d, want 1", r.MCP)
+	}
+}
+
+func TestScanKilocode_HomeAndProject(t *testing.T) {
+	home := t.TempDir()
+	proj := t.TempDir()
+
+	mkdirAll(t, filepath.Join(home, ".kilocode", "skills", "commit"))
+	rulesDir := filepath.Join(proj, ".kilocode", "rules")
+	mkdirAll(t, rulesDir)
+	writeTestFile(t, filepath.Join(rulesDir, "rule1.md"), "rule one")
+
+	r := scanKilocode(proj, home)
+	if r.Skills != 2 { // 1 home skill + 1 project rule
+		t.Errorf("skills = %d, want 2", r.Skills)
+	}
+	if len(r.Sources) != 2 {
+		t.Errorf("sources = %d, want 2", len(r.Sources))
+	}
+}
+
+func TestScanKilocode_ConfigDir(t *testing.T) {
+	home := t.TempDir()
+	mkdirAll(t, filepath.Join(home, ".kilocode", "skills", "commit"))
+
+	r := scanKilocode(t.TempDir(), home)
+	if r.ConfigDir != "~/.kilocode" {
+		t.Errorf("config_dir = %q, want %q", r.ConfigDir, "~/.kilocode")
 	}
 }
