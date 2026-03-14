@@ -7,13 +7,118 @@ import (
 	"strings"
 )
 
+// agentPathSpec defines the configuration for scanning an agent's files.
+type agentPathSpec struct {
+	Name     AgentName
+	Advisory bool
+	Home     []pathSpec
+	Project  []pathSpec
+}
+
+type pathSpec struct {
+	Path          string
+	Type          pathType
+	FileExt       string // For file-based skills with specific extensions
+	SourcePrefix  string // e.g., "~/"
+	RecursiveSize bool
+	Parse         func(path string, r *AgentResult) (found bool, size int64)
+	Comment       string
+}
+
+type pathType int
+
+const (
+	pathTypeFile pathType = iota
+	pathTypeDirSkills
+	pathTypeDirFiles
+	pathTypeCustom
+)
+
+func scanAgentPaths(projectDir, homeDir string, spec agentPathSpec) AgentResult {
+	r := AgentResult{Name: spec.Name, Advisory: spec.Advisory}
+	var totalBytes int64
+
+	process := func(baseDir, path, sourcePrefix, comment string, pt pathType, recursive bool, parseFunc func(string, *AgentResult) (bool, int64)) {
+		if baseDir == "" {
+			return
+		}
+
+		fullPath := resolvePath(filepath.Join(baseDir, path))
+		found := false
+		var size int64
+
+		if parseFunc != nil {
+			found, size = parseFunc(fullPath, &r)
+		} else {
+			switch pt {
+			case pathTypeFile:
+				if s := fileBytes(fullPath); s > 0 {
+					r.Skills++
+					found = true
+					size = s
+				}
+			case pathTypeDirSkills:
+				count := countSkillDirs(fullPath)
+				if count > 0 {
+					r.Skills += count
+					found = true
+				}
+				if recursive {
+					size = dirBytesRecursive(fullPath)
+				} else {
+					size = dirBytes(fullPath)
+				}
+			case pathTypeDirFiles:
+				count := countFiles(fullPath)
+				if count > 0 {
+					r.Skills += count
+					found = true
+				}
+				if recursive {
+					size = dirBytesRecursive(fullPath)
+				} else {
+					size = dirBytes(fullPath)
+				}
+			case pathTypeCustom:
+				// Custom handling for cursor .mdc files
+				entries, err := os.ReadDir(fullPath)
+				if err == nil {
+					for _, e := range entries {
+						if !e.IsDir() && filepath.Ext(e.Name()) == ".mdc" {
+							r.Skills++
+							found = true
+						}
+					}
+				}
+				size = dirBytes(fullPath)
+			}
+		}
+
+		if found {
+			source := sourcePrefix + path
+			if comment != "" {
+				source += " " + comment
+			}
+			r.Sources = append(r.Sources, source)
+		}
+		totalBytes += size
+	}
+
+	for _, p := range spec.Home {
+		process(homeDir, p.Path, p.SourcePrefix, p.Comment, p.Type, p.RecursiveSize, p.Parse)
+	}
+	for _, p := range spec.Project {
+		process(projectDir, p.Path, p.SourcePrefix, p.Comment, p.Type, p.RecursiveSize, p.Parse)
+	}
+
+	r.Tokens = bytesToTokens(totalBytes)
+	return r
+}
+
 // resolvePath resolves symlinks in a path if it exists, otherwise returns the original path.
-// This ensures that agent config directories are correctly detected even when home directories
-// or config paths are symlinked.
 func resolvePath(path string) string {
 	resolved, err := filepath.EvalSymlinks(path)
 	if err != nil {
-		// Path doesn't exist or can't be resolved - return original for existence checks
 		return path
 	}
 	return resolved
@@ -29,7 +134,6 @@ func fileBytes(path string) int64 {
 }
 
 // dirBytes returns the total size of all regular files in a directory (non-recursive).
-// Uses os.Stat to follow symlinks and get the target file size.
 func dirBytes(dir string) int64 {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
@@ -47,7 +151,6 @@ func dirBytes(dir string) int64 {
 }
 
 // dirBytesRecursive returns the total size of all regular files under dir, recursively.
-// Follows symlinks so that symlinked directories and files are included.
 func dirBytesRecursive(dir string) int64 {
 	return dirBytesRecursiveDepth(dir, 10)
 }
@@ -82,7 +185,6 @@ func bytesToTokens(b int64) int64 {
 }
 
 // countSkillDirs counts subdirectories in a skills directory.
-// Follows symlinks so that symlinked skill directories are counted.
 func countSkillDirs(dir string) int {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
@@ -199,363 +301,239 @@ func parseMCPServers(path string) int {
 }
 
 func scanClaudeCode(projectDir, homeDir string) AgentResult {
-	r := AgentResult{Name: AgentClaudeCode}
-	var bytes int64
-
-	if homeDir != "" {
-		globalSkillsDir := resolvePath(filepath.Join(homeDir, ".claude", "skills"))
-		r.Skills += countSkillDirs(globalSkillsDir)
-
-		globalSettings := resolvePath(filepath.Join(homeDir, ".claude", "settings.json"))
-		hooks, mcp, found := parseClaudeSettings(globalSettings)
-		if found {
-			r.Hooks += hooks
-			r.MCP += mcp
-			r.Sources = append(r.Sources, "~/.claude/settings.json")
-		}
-		if r.Skills > 0 {
-			r.Sources = append(r.Sources, "~/.claude/skills/")
-		}
-
-		bytes += fileBytes(globalSettings)
-		bytes += dirBytesRecursive(globalSkillsDir)
-		bytes += fileBytes(resolvePath(filepath.Join(homeDir, ".claude", "CLAUDE.md")))
+	spec := agentPathSpec{
+		Name: AgentClaudeCode,
+		Home: []pathSpec{
+			{
+				Path: ".claude/settings.json", SourcePrefix: "~/",
+				Parse: func(path string, r *AgentResult) (bool, int64) {
+					hooks, mcp, found := parseClaudeSettings(path)
+					r.Hooks += hooks
+					r.MCP += mcp
+					return found, fileBytes(path)
+				},
+			},
+			{Path: ".claude/skills", SourcePrefix: "~/", Type: pathTypeDirSkills, RecursiveSize: true},
+			{Path: ".claude/CLAUDE.md", SourcePrefix: "~/", Type: pathTypeFile},
+		},
+		Project: []pathSpec{
+			{Path: ".claude/skills", SourcePrefix: "./", Type: pathTypeDirSkills, RecursiveSize: true},
+			{Path: "CLAUDE.md", SourcePrefix: "./", Type: pathTypeFile},
+			{Path: ".claude/settings.local.json", SourcePrefix: "./", Type: pathTypeFile},
+			{Path: "CLAUDE.local.md", SourcePrefix: "./", Type: pathTypeFile},
+		},
 	}
-
-	projectSkillsDir := resolvePath(filepath.Join(projectDir, ".claude", "skills"))
-	projSkillCount := countSkillDirs(projectSkillsDir)
-	r.Skills += projSkillCount
-	if projSkillCount > 0 {
-		r.Sources = append(r.Sources, ".claude/skills/")
-	}
-
-	localSettings := resolvePath(filepath.Join(projectDir, ".claude", "settings.local.json"))
-	if _, err := os.Stat(localSettings); err == nil {
-		r.Sources = append(r.Sources, ".claude/settings.local.json")
-	}
-
-	bytes += fileBytes(localSettings)
-	bytes += dirBytesRecursive(projectSkillsDir)
-	bytes += fileBytes(resolvePath(filepath.Join(projectDir, "CLAUDE.md")))
-	bytes += fileBytes(resolvePath(filepath.Join(projectDir, "CLAUDE.local.md")))
-
-	r.Tokens = bytesToTokens(bytes)
-	return r
+	return scanAgentPaths(projectDir, homeDir, spec)
 }
 
 func scanCline(projectDir, homeDir string) AgentResult {
-	r := AgentResult{Name: AgentCline}
-	var bytes int64
-
-	if homeDir != "" {
-		homeSkillsDir := resolvePath(filepath.Join(homeDir, ".cline", "skills"))
-		homeCount := countSkillDirs(homeSkillsDir)
-		r.Skills += homeCount
-		if homeCount > 0 {
-			r.Sources = append(r.Sources, "~/.cline/skills/")
-		}
-		bytes += dirBytesRecursive(homeSkillsDir)
+	spec := agentPathSpec{
+		Name: AgentCline,
+		Home: []pathSpec{
+			{Path: ".cline/skills", SourcePrefix: "~/", Type: pathTypeDirSkills, RecursiveSize: true},
+		},
+		Project: []pathSpec{
+			{Path: ".clinerules", SourcePrefix: "./", Type: pathTypeDirFiles},
+		},
 	}
-
-	rulesDir := resolvePath(filepath.Join(projectDir, ".clinerules"))
-	count := countFiles(rulesDir)
-	if count > 0 {
-		r.Skills += count
-		r.Sources = append(r.Sources, ".clinerules/")
-	}
-	bytes += dirBytes(rulesDir)
-
-	r.Tokens = bytesToTokens(bytes)
-	return r
+	return scanAgentPaths(projectDir, homeDir, spec)
 }
 
 func scanCursor(projectDir, homeDir string) AgentResult {
-	r := AgentResult{Name: AgentCursor}
-	var bytes int64
-
-	rulesDir := resolvePath(filepath.Join(projectDir, ".cursor", "rules"))
-	entries, err := os.ReadDir(rulesDir)
-	if err == nil {
-		for _, e := range entries {
-			if !e.IsDir() && filepath.Ext(e.Name()) == ".mdc" {
-				r.Skills++
-			}
-		}
-		if r.Skills > 0 {
-			r.Sources = append(r.Sources, ".cursor/rules/")
-		}
+	spec := agentPathSpec{
+		Name: AgentCursor,
+		Home: []pathSpec{
+			{
+				Path: ".cursor/mcp.json", SourcePrefix: "~/",
+				Parse: func(path string, r *AgentResult) (bool, int64) {
+					mcp := parseMCPServers(path)
+					if mcp > 0 {
+						r.MCP += mcp
+						return true, fileBytes(path)
+					}
+					return false, 0
+				},
+			},
+		},
+		Project: []pathSpec{
+			{Path: ".cursor/rules", SourcePrefix: "./", Type: pathTypeCustom},
+		},
 	}
-	bytes += dirBytes(rulesDir)
-
-	if homeDir != "" {
-		mcpPath := resolvePath(filepath.Join(homeDir, ".cursor", "mcp.json"))
-		mcpCount := parseMCPServers(mcpPath)
-		if mcpCount > 0 {
-			r.MCP += mcpCount
-			r.Sources = append(r.Sources, "~/.cursor/mcp.json")
-		}
-		bytes += fileBytes(mcpPath)
-	}
-
-	r.Tokens = bytesToTokens(bytes)
-	return r
+	return scanAgentPaths(projectDir, homeDir, spec)
 }
 
 func scanOpenCode(projectDir, homeDir string) AgentResult {
-	r := AgentResult{Name: AgentOpenCode, Advisory: true}
-	var totalBytes int64
-
-	if homeDir != "" {
-		instructions, mcp, b, found := parseOpenCodeJSON(resolvePath(filepath.Join(homeDir, ".config", "opencode", "opencode.json")))
-		if found {
-			r.Skills += instructions
-			r.MCP += mcp
-			totalBytes += b
-			r.Sources = append(r.Sources, "~/.config/opencode/ (advisory)")
-		}
+	spec := agentPathSpec{
+		Name:     AgentOpenCode,
+		Advisory: true,
+		Home: []pathSpec{
+			{
+				Path: ".config/opencode/opencode.json", SourcePrefix: "~/", Comment: "(advisory)",
+				Parse: func(path string, r *AgentResult) (bool, int64) {
+					skills, mcp, bytes, found := parseOpenCodeJSON(path)
+					r.Skills += skills
+					r.MCP += mcp
+					return found, bytes
+				},
+			},
+		},
+		Project: []pathSpec{
+			{
+				Path: "opencode.json", SourcePrefix: "./", Comment: "(advisory)",
+				Parse: func(path string, r *AgentResult) (bool, int64) {
+					skills, mcp, bytes, found := parseOpenCodeJSON(path)
+					r.Skills += skills
+					r.MCP += mcp
+					return found, bytes
+				},
+			},
+		},
 	}
-
-	instructions, mcp, b, found := parseOpenCodeJSON(resolvePath(filepath.Join(projectDir, "opencode.json")))
-	if found {
-		r.Skills += instructions
-		r.MCP += mcp
-		totalBytes += b
-		r.Sources = append(r.Sources, "opencode.json (advisory)")
-	}
-
-	r.Tokens = bytesToTokens(totalBytes)
-	return r
+	return scanAgentPaths(projectDir, homeDir, spec)
 }
 
 func scanCodex(projectDir, homeDir string) AgentResult {
-	r := AgentResult{Name: AgentCodex, Advisory: true}
-	var bytes int64
-
-	if homeDir != "" {
-		homeAgents := resolvePath(filepath.Join(homeDir, ".codex", "AGENTS.md"))
-		if _, err := os.Stat(homeAgents); err == nil {
-			r.Skills++
-			r.Sources = append(r.Sources, "~/.codex/AGENTS.md (advisory)")
-		}
-		bytes += fileBytes(homeAgents)
-
-		homeSkillsDir := resolvePath(filepath.Join(homeDir, ".codex", "skills"))
-		homeSkillCount := countSkillDirs(homeSkillsDir)
-		r.Skills += homeSkillCount
-		if homeSkillCount > 0 {
-			r.Sources = append(r.Sources, "~/.codex/skills/ (advisory)")
-		}
-		bytes += dirBytesRecursive(homeSkillsDir)
-
-		configPath := resolvePath(filepath.Join(homeDir, ".codex", "config.toml"))
-		mcpCount := parseCodexTOMLMCP(configPath)
-		if mcpCount > 0 {
-			r.MCP += mcpCount
-			r.Sources = append(r.Sources, "~/.codex/config.toml (advisory)")
-		}
-		bytes += fileBytes(configPath)
+	spec := agentPathSpec{
+		Name:     AgentCodex,
+		Advisory: true,
+		Home: []pathSpec{
+			{Path: ".codex/AGENTS.md", SourcePrefix: "~/", Type: pathTypeFile, Comment: "(advisory)"},
+			{Path: ".codex/skills", SourcePrefix: "~/", Type: pathTypeDirSkills, RecursiveSize: true, Comment: "(advisory)"},
+			{
+				Path: ".codex/config.toml", SourcePrefix: "~/", Comment: "(advisory)",
+				Parse: func(path string, r *AgentResult) (bool, int64) {
+					mcp := parseCodexTOMLMCP(path)
+					if mcp > 0 {
+						r.MCP += mcp
+						return true, fileBytes(path)
+					}
+					return false, 0
+				},
+			},
+		},
+		Project: []pathSpec{
+			{Path: "AGENTS.md", SourcePrefix: "./", Type: pathTypeFile, Comment: "(advisory)"},
+			{Path: ".codex", SourcePrefix: "./", Type: pathTypeDirFiles},
+		},
 	}
-
-	agentsPath := resolvePath(filepath.Join(projectDir, "AGENTS.md"))
-	if _, err := os.Stat(agentsPath); err == nil {
-		r.Skills++
-		r.Sources = append(r.Sources, "AGENTS.md (advisory)")
-	}
-	bytes += fileBytes(agentsPath)
-
-	codexDir := resolvePath(filepath.Join(projectDir, ".codex"))
-	count := countFiles(codexDir)
-	if count > 0 {
-		r.Skills += count
-		r.Sources = append(r.Sources, ".codex/")
-	}
-	bytes += dirBytes(codexDir)
-
-	r.Tokens = bytesToTokens(bytes)
-	return r
+	return scanAgentPaths(projectDir, homeDir, spec)
 }
 
-func scanQwen(_ string, homeDir string) AgentResult {
-	r := AgentResult{Name: AgentQwen, Advisory: true}
-	var bytes int64
-
-	if homeDir == "" {
-		return r
+func scanQwen(projectDir, homeDir string) AgentResult {
+	spec := agentPathSpec{
+		Name:     AgentQwen,
+		Advisory: true,
+		Home: []pathSpec{
+			{Path: ".qwen/skills", SourcePrefix: "~/", Type: pathTypeDirSkills, RecursiveSize: true, Comment: "(advisory)"},
+			{
+				Path: ".qwen/settings.json", SourcePrefix: "~/", Comment: "(advisory)",
+				Parse: func(path string, r *AgentResult) (bool, int64) {
+					mcp := parseMCPServers(path)
+					if mcp > 0 {
+						r.MCP += mcp
+						return true, fileBytes(path)
+					}
+					return false, 0
+				},
+			},
+		},
 	}
-
-	homeSkillsDir := resolvePath(filepath.Join(homeDir, ".qwen", "skills"))
-	homeCount := countSkillDirs(homeSkillsDir)
-	r.Skills += homeCount
-	if homeCount > 0 {
-		r.Sources = append(r.Sources, "~/.qwen/skills/ (advisory)")
-	}
-	bytes += dirBytesRecursive(homeSkillsDir)
-
-	cfgPath := resolvePath(filepath.Join(homeDir, ".qwen", "settings.json"))
-	mcpCount := parseMCPServers(cfgPath)
-	if mcpCount > 0 {
-		r.MCP = mcpCount
-		r.Sources = append(r.Sources, "~/.qwen/settings.json (advisory)")
-	}
-	bytes += fileBytes(cfgPath)
-
-	r.Tokens = bytesToTokens(bytes)
-	return r
+	return scanAgentPaths(projectDir, homeDir, spec)
 }
 
-func scanOpenClaw(_ string, homeDir string) AgentResult {
-	r := AgentResult{Name: AgentOpenClaw, Advisory: true}
-	var bytes int64
-
-	if homeDir == "" {
-		return r
+func scanOpenClaw(projectDir, homeDir string) AgentResult {
+	spec := agentPathSpec{
+		Name:     AgentOpenClaw,
+		Advisory: true,
+		Home: []pathSpec{
+			{Path: ".openclaw/skills", SourcePrefix: "~/", Type: pathTypeDirSkills, RecursiveSize: true, Comment: "(advisory)"},
+			{
+				Path: ".openclaw/openclaw.json", SourcePrefix: "~/", Comment: "(advisory)",
+				Parse: func(path string, r *AgentResult) (bool, int64) {
+					mcp := parseMCPServers(path)
+					if mcp > 0 {
+						r.MCP += mcp
+						return true, fileBytes(path)
+					}
+					return false, 0
+				},
+			},
+			{
+				Path: ".openclaw/config/mcporter.json", SourcePrefix: "~/", Comment: "(advisory)",
+				Parse: func(path string, r *AgentResult) (bool, int64) {
+					mcp := parseMCPServers(path)
+					if mcp > 0 {
+						r.MCP += mcp
+						return true, fileBytes(path)
+					}
+					return false, 0
+				},
+			},
+		},
 	}
-
-	homeSkillsDir := resolvePath(filepath.Join(homeDir, ".openclaw", "skills"))
-	homeCount := countSkillDirs(homeSkillsDir)
-	r.Skills += homeCount
-	if homeCount > 0 {
-		r.Sources = append(r.Sources, "~/.openclaw/skills/ (advisory)")
-	}
-	bytes += dirBytesRecursive(homeSkillsDir)
-
-	cfgPath := resolvePath(filepath.Join(homeDir, ".openclaw", "openclaw.json"))
-	mcpCount := parseMCPServers(cfgPath)
-	if mcpCount > 0 {
-		r.MCP += mcpCount
-		r.Sources = append(r.Sources, "~/.openclaw/openclaw.json (advisory)")
-	}
-	bytes += fileBytes(cfgPath)
-
-	mcporterPath := resolvePath(filepath.Join(homeDir, ".openclaw", "config", "mcporter.json"))
-	mcporterCount := parseMCPServers(mcporterPath)
-	if mcporterCount > 0 {
-		r.MCP += mcporterCount
-		r.Sources = append(r.Sources, "~/.openclaw/config/mcporter.json (advisory)")
-	}
-	bytes += fileBytes(mcporterPath)
-
-	r.Tokens = bytesToTokens(bytes)
-	return r
+	return scanAgentPaths(projectDir, homeDir, spec)
 }
 
 func scanWindsurf(projectDir, homeDir string) AgentResult {
-	r := AgentResult{Name: AgentWindsurf}
-	var bytes int64
-
-	// Project: .windsurfrules (single file).
-	rulesFile := resolvePath(filepath.Join(projectDir, ".windsurfrules"))
-	if fb := fileBytes(rulesFile); fb > 0 {
-		r.Skills++
-		r.Sources = append(r.Sources, ".windsurfrules")
-		bytes += fb
+	spec := agentPathSpec{
+		Name: AgentWindsurf,
+		Home: []pathSpec{
+			{Path: ".windsurf/rules", SourcePrefix: "~/", Type: pathTypeDirFiles},
+			{
+				Path: ".codeium/windsurf/mcp_config.json", SourcePrefix: "~/",
+				Parse: func(path string, r *AgentResult) (bool, int64) {
+					mcp := parseMCPServers(path)
+					if mcp > 0 {
+						r.MCP += mcp
+						return true, fileBytes(path)
+					}
+					return false, 0
+				},
+			},
+		},
+		Project: []pathSpec{
+			{Path: ".windsurfrules", SourcePrefix: "./", Type: pathTypeFile},
+			{Path: ".windsurf/rules", SourcePrefix: "./", Type: pathTypeDirFiles},
+		},
 	}
-
-	// Project: .windsurf/rules/ (directory of rule files).
-	projRulesDir := resolvePath(filepath.Join(projectDir, ".windsurf", "rules"))
-	projCount := countFiles(projRulesDir)
-	if projCount > 0 {
-		r.Skills += projCount
-		r.Sources = append(r.Sources, ".windsurf/rules/")
-	}
-	bytes += dirBytes(projRulesDir)
-
-	if homeDir != "" {
-		// Global: ~/.windsurf/rules/.
-		homeRulesDir := resolvePath(filepath.Join(homeDir, ".windsurf", "rules"))
-		homeCount := countFiles(homeRulesDir)
-		if homeCount > 0 {
-			r.Skills += homeCount
-			r.Sources = append(r.Sources, "~/.windsurf/rules/")
-		}
-		bytes += dirBytes(homeRulesDir)
-
-		// MCP: ~/.codeium/windsurf/mcp_config.json.
-		mcpPath := resolvePath(filepath.Join(homeDir, ".codeium", "windsurf", "mcp_config.json"))
-		mcpCount := parseMCPServers(mcpPath)
-		if mcpCount > 0 {
-			r.MCP += mcpCount
-			r.Sources = append(r.Sources, "~/.codeium/windsurf/mcp_config.json")
-		}
-		bytes += fileBytes(mcpPath)
-	}
-
-	r.Tokens = bytesToTokens(bytes)
-	return r
+	return scanAgentPaths(projectDir, homeDir, spec)
 }
 
 func scanAider(projectDir, homeDir string) AgentResult {
-	r := AgentResult{Name: AgentAider, Advisory: true}
-	var bytes int64
-
-	// Project: .aider.conf.yml.
-	projConf := resolvePath(filepath.Join(projectDir, ".aider.conf.yml"))
-	if fb := fileBytes(projConf); fb > 0 {
-		r.Skills++
-		r.Sources = append(r.Sources, ".aider.conf.yml (advisory)")
-		bytes += fb
+	spec := agentPathSpec{
+		Name:     AgentAider,
+		Advisory: true,
+		Home: []pathSpec{
+			{Path: ".aider.conf.yml", SourcePrefix: "~/", Type: pathTypeFile, Comment: "(advisory)"},
+		},
+		Project: []pathSpec{
+			{Path: ".aider.conf.yml", SourcePrefix: "./", Type: pathTypeFile, Comment: "(advisory)"},
+		},
 	}
-
-	if homeDir != "" {
-		// Global: ~/.aider.conf.yml.
-		homeConf := resolvePath(filepath.Join(homeDir, ".aider.conf.yml"))
-		if fb := fileBytes(homeConf); fb > 0 {
-			r.Skills++
-			r.Sources = append(r.Sources, "~/.aider.conf.yml (advisory)")
-			bytes += fb
-		}
-	}
-
-	r.Tokens = bytesToTokens(bytes)
-	return r
+	return scanAgentPaths(projectDir, homeDir, spec)
 }
 
 func scanContinue(projectDir, homeDir string) AgentResult {
-	r := AgentResult{Name: AgentContinue, Advisory: true}
-	var bytes int64
-
-	if homeDir != "" {
-		// Global: ~/.continue/config.yaml.
-		yamlConf := resolvePath(filepath.Join(homeDir, ".continue", "config.yaml"))
-		if fb := fileBytes(yamlConf); fb > 0 {
-			r.Skills++
-			r.Sources = append(r.Sources, "~/.continue/config.yaml (advisory)")
-			bytes += fb
-		}
-
-		// Global: ~/.continue/config.json (deprecated).
-		jsonConf := resolvePath(filepath.Join(homeDir, ".continue", "config.json"))
-		if fb := fileBytes(jsonConf); fb > 0 {
-			r.Skills++
-			r.Sources = append(r.Sources, "~/.continue/config.json (advisory)")
-			bytes += fb
-		}
+	spec := agentPathSpec{
+		Name:     AgentContinue,
+		Advisory: true,
+		Home: []pathSpec{
+			{Path: ".continue/config.yaml", SourcePrefix: "~/", Type: pathTypeFile, Comment: "(advisory)"},
+			{Path: ".continue/config.json", SourcePrefix: "~/", Type: pathTypeFile, Comment: "(advisory)"},
+		},
+		Project: []pathSpec{
+			{Path: ".continuerc.json", SourcePrefix: "./", Type: pathTypeFile, Comment: "(advisory)"},
+		},
 	}
-
-	// Project: .continuerc.json.
-	projConf := resolvePath(filepath.Join(projectDir, ".continuerc.json"))
-	if fb := fileBytes(projConf); fb > 0 {
-		r.Skills++
-		r.Sources = append(r.Sources, ".continuerc.json (advisory)")
-		bytes += fb
-	}
-
-	r.Tokens = bytesToTokens(bytes)
-	return r
+	return scanAgentPaths(projectDir, homeDir, spec)
 }
 
-func scanCopilot(projectDir, _ string) AgentResult {
-	r := AgentResult{Name: AgentCopilot}
-	var bytes int64
-
-	// Project: .github/copilot-instructions.md.
-	instrFile := resolvePath(filepath.Join(projectDir, ".github", "copilot-instructions.md"))
-	if fb := fileBytes(instrFile); fb > 0 {
-		r.Skills++
-		r.Sources = append(r.Sources, ".github/copilot-instructions.md")
-		bytes += fb
+func scanCopilot(projectDir, homeDir string) AgentResult {
+	spec := agentPathSpec{
+		Name: AgentCopilot,
+		Project: []pathSpec{
+			{Path: ".github/copilot-instructions.md", SourcePrefix: "./", Type: pathTypeFile},
+		},
 	}
-
-	r.Tokens = bytesToTokens(bytes)
-	return r
+	return scanAgentPaths(projectDir, homeDir, spec)
 }
