@@ -95,7 +95,7 @@ func TestScanAgentPaths(t *testing.T) {
 				Hooks:     1,
 				MCP:       1,
 				Sources:   []string{"./.claude/skills/", "./CLAUDE.md", "~/.claude/CLAUDE.md", "~/.claude/settings.json", "~/.claude/skills/"},
-				Tokens:    bytesToTokens(83 + 11 + 1 + 14 + 1),
+				Tokens:    bytesToTokens(73 + 11 + 1 + 14),
 			},
 		},
 		{

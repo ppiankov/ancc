@@ -315,8 +315,8 @@ func TestScanClaudeCode_GlobalAndProject(t *testing.T) {
 	if r.MCP != 1 {
 		t.Errorf("mcp = %d, want 1", r.MCP)
 	}
-	if len(r.Sources) != 5 {
-		t.Errorf("sources = %d, want 5", len(r.Sources))
+	if len(r.Sources) != 4 {
+		t.Errorf("sources = %d, want 4 (settings.json + home skills/ + project skills/ + settings.local.json)", len(r.Sources))
 	}
 }
 
