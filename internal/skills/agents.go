@@ -7,38 +7,21 @@ import (
 	"strings"
 )
 
-// resolveSymlink resolves a path if it's a symlink, returning the target path.
-// If the path doesn't exist or is not a symlink, it returns the original path.
-// This ensures symlinked agent config directories are properly detected.
-func resolveSymlink(path string) string {
+// resolvePath resolves symlinks in a path if it exists, otherwise returns the original path.
+// This ensures that agent config directories are correctly detected even when home directories
+// or config paths are symlinked.
+func resolvePath(path string) string {
 	resolved, err := filepath.EvalSymlinks(path)
 	if err != nil {
+		// Path doesn't exist or can't be resolved - return original for existence checks
 		return path
 	}
 	return resolved
 }
 
-// statPath resolves symlinks and returns file info for the path.
-// Returns nil if the path doesn't exist (including broken symlinks).
-func statPath(path string) os.FileInfo {
-	resolved := resolveSymlink(path)
-	info, err := os.Stat(resolved)
-	if err != nil {
-		return nil
-	}
-	return info
-}
-
-// dirExists checks if a directory exists, following symlinks.
-func dirExists(path string) bool {
-	info := statPath(path)
-	return info != nil && info.IsDir()
-}
-
 // fileBytes returns the size of a single file in bytes, or 0 on error.
 func fileBytes(path string) int64 {
-	resolved := resolveSymlink(path)
-	info, err := os.Stat(resolved)
+	info, err := os.Stat(path)
 	if err != nil {
 		return 0
 	}
@@ -48,14 +31,13 @@ func fileBytes(path string) int64 {
 // dirBytes returns the total size of all regular files in a directory (non-recursive).
 // Uses os.Stat to follow symlinks and get the target file size.
 func dirBytes(dir string) int64 {
-	resolved := resolveSymlink(dir)
-	entries, err := os.ReadDir(resolved)
+	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return 0
 	}
 	var total int64
 	for _, e := range entries {
-		info, err := os.Stat(filepath.Join(resolved, e.Name()))
+		info, err := os.Stat(filepath.Join(dir, e.Name()))
 		if err != nil || info.IsDir() {
 			continue
 		}
@@ -74,14 +56,13 @@ func dirBytesRecursiveDepth(dir string, maxDepth int) int64 {
 	if maxDepth <= 0 {
 		return 0
 	}
-	resolved := resolveSymlink(dir)
-	entries, err := os.ReadDir(resolved)
+	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return 0
 	}
 	var total int64
 	for _, e := range entries {
-		path := filepath.Join(resolved, e.Name())
+		path := filepath.Join(dir, e.Name())
 		info, err := os.Stat(path)
 		if err != nil {
 			continue
@@ -103,8 +84,7 @@ func bytesToTokens(b int64) int64 {
 // countSkillDirs counts subdirectories in a skills directory.
 // Follows symlinks so that symlinked skill directories are counted.
 func countSkillDirs(dir string) int {
-	resolved := resolveSymlink(dir)
-	entries, err := os.ReadDir(resolved)
+	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return 0
 	}
@@ -115,7 +95,7 @@ func countSkillDirs(dir string) int {
 			continue
 		}
 		if e.Type()&os.ModeSymlink != 0 {
-			info, err := os.Stat(filepath.Join(resolved, e.Name()))
+			info, err := os.Stat(filepath.Join(dir, e.Name()))
 			if err == nil && info.IsDir() {
 				count++
 			}
@@ -126,8 +106,7 @@ func countSkillDirs(dir string) int {
 
 // countFiles counts regular files in a directory.
 func countFiles(dir string) int {
-	resolved := resolveSymlink(dir)
-	entries, err := os.ReadDir(resolved)
+	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return 0
 	}
@@ -142,8 +121,7 @@ func countFiles(dir string) int {
 
 // parseClaudeSettings reads a Claude settings.json and counts hooks and MCP servers.
 func parseClaudeSettings(path string) (hooks, mcp int, found bool) {
-	resolved := resolveSymlink(path)
-	data, err := os.ReadFile(resolved)
+	data, err := os.ReadFile(path)
 	if err != nil {
 		return 0, 0, false
 	}
@@ -174,8 +152,7 @@ func parseClaudeSettings(path string) (hooks, mcp int, found bool) {
 
 // parseCodexTOMLMCP counts [mcp_servers.*] table sections in a Codex config.toml.
 func parseCodexTOMLMCP(path string) int {
-	resolved := resolveSymlink(path)
-	data, err := os.ReadFile(resolved)
+	data, err := os.ReadFile(path)
 	if err != nil {
 		return 0
 	}
@@ -191,8 +168,7 @@ func parseCodexTOMLMCP(path string) int {
 
 // parseOpenCodeJSON reads an opencode.json and returns instruction count, MCP count, byte size, and whether the file exists.
 func parseOpenCodeJSON(path string) (instructions, mcp int, bytes int64, found bool) {
-	resolved := resolveSymlink(path)
-	data, err := os.ReadFile(resolved)
+	data, err := os.ReadFile(path)
 	if err != nil {
 		return 0, 0, 0, false
 	}
@@ -209,8 +185,7 @@ func parseOpenCodeJSON(path string) (instructions, mcp int, bytes int64, found b
 
 // parseMCPServers reads a JSON file and counts entries under "mcpServers".
 func parseMCPServers(path string) int {
-	resolved := resolveSymlink(path)
-	data, err := os.ReadFile(resolved)
+	data, err := os.ReadFile(path)
 	if err != nil {
 		return 0
 	}
@@ -228,10 +203,10 @@ func scanClaudeCode(projectDir, homeDir string) AgentResult {
 	var bytes int64
 
 	if homeDir != "" {
-		globalSkillsDir := filepath.Join(homeDir, ".claude", "skills")
+		globalSkillsDir := resolvePath(filepath.Join(homeDir, ".claude", "skills"))
 		r.Skills += countSkillDirs(globalSkillsDir)
 
-		globalSettings := filepath.Join(homeDir, ".claude", "settings.json")
+		globalSettings := resolvePath(filepath.Join(homeDir, ".claude", "settings.json"))
 		hooks, mcp, found := parseClaudeSettings(globalSettings)
 		if found {
 			r.Hooks += hooks
@@ -244,25 +219,25 @@ func scanClaudeCode(projectDir, homeDir string) AgentResult {
 
 		bytes += fileBytes(globalSettings)
 		bytes += dirBytesRecursive(globalSkillsDir)
-		bytes += fileBytes(filepath.Join(homeDir, ".claude", "CLAUDE.md"))
+		bytes += fileBytes(resolvePath(filepath.Join(homeDir, ".claude", "CLAUDE.md")))
 	}
 
-	projectSkillsDir := filepath.Join(projectDir, ".claude", "skills")
+	projectSkillsDir := resolvePath(filepath.Join(projectDir, ".claude", "skills"))
 	projSkillCount := countSkillDirs(projectSkillsDir)
 	r.Skills += projSkillCount
 	if projSkillCount > 0 {
 		r.Sources = append(r.Sources, ".claude/skills/")
 	}
 
-	localSettings := filepath.Join(projectDir, ".claude", "settings.local.json")
+	localSettings := resolvePath(filepath.Join(projectDir, ".claude", "settings.local.json"))
 	if _, err := os.Stat(localSettings); err == nil {
 		r.Sources = append(r.Sources, ".claude/settings.local.json")
 	}
 
 	bytes += fileBytes(localSettings)
 	bytes += dirBytesRecursive(projectSkillsDir)
-	bytes += fileBytes(filepath.Join(projectDir, "CLAUDE.md"))
-	bytes += fileBytes(filepath.Join(projectDir, "CLAUDE.local.md"))
+	bytes += fileBytes(resolvePath(filepath.Join(projectDir, "CLAUDE.md")))
+	bytes += fileBytes(resolvePath(filepath.Join(projectDir, "CLAUDE.local.md")))
 
 	r.Tokens = bytesToTokens(bytes)
 	return r
@@ -273,7 +248,7 @@ func scanCline(projectDir, homeDir string) AgentResult {
 	var bytes int64
 
 	if homeDir != "" {
-		homeSkillsDir := filepath.Join(homeDir, ".cline", "skills")
+		homeSkillsDir := resolvePath(filepath.Join(homeDir, ".cline", "skills"))
 		homeCount := countSkillDirs(homeSkillsDir)
 		r.Skills += homeCount
 		if homeCount > 0 {
@@ -282,7 +257,7 @@ func scanCline(projectDir, homeDir string) AgentResult {
 		bytes += dirBytesRecursive(homeSkillsDir)
 	}
 
-	rulesDir := filepath.Join(projectDir, ".clinerules")
+	rulesDir := resolvePath(filepath.Join(projectDir, ".clinerules"))
 	count := countFiles(rulesDir)
 	if count > 0 {
 		r.Skills += count
@@ -298,9 +273,8 @@ func scanCursor(projectDir, homeDir string) AgentResult {
 	r := AgentResult{Name: AgentCursor}
 	var bytes int64
 
-	rulesDir := filepath.Join(projectDir, ".cursor", "rules")
-	resolvedRulesDir := resolveSymlink(rulesDir)
-	entries, err := os.ReadDir(resolvedRulesDir)
+	rulesDir := resolvePath(filepath.Join(projectDir, ".cursor", "rules"))
+	entries, err := os.ReadDir(rulesDir)
 	if err == nil {
 		for _, e := range entries {
 			if !e.IsDir() && filepath.Ext(e.Name()) == ".mdc" {
@@ -314,7 +288,7 @@ func scanCursor(projectDir, homeDir string) AgentResult {
 	bytes += dirBytes(rulesDir)
 
 	if homeDir != "" {
-		mcpPath := filepath.Join(homeDir, ".cursor", "mcp.json")
+		mcpPath := resolvePath(filepath.Join(homeDir, ".cursor", "mcp.json"))
 		mcpCount := parseMCPServers(mcpPath)
 		if mcpCount > 0 {
 			r.MCP += mcpCount
@@ -332,7 +306,7 @@ func scanOpenCode(projectDir, homeDir string) AgentResult {
 	var totalBytes int64
 
 	if homeDir != "" {
-		instructions, mcp, b, found := parseOpenCodeJSON(filepath.Join(homeDir, ".config", "opencode", "opencode.json"))
+		instructions, mcp, b, found := parseOpenCodeJSON(resolvePath(filepath.Join(homeDir, ".config", "opencode", "opencode.json")))
 		if found {
 			r.Skills += instructions
 			r.MCP += mcp
@@ -341,7 +315,7 @@ func scanOpenCode(projectDir, homeDir string) AgentResult {
 		}
 	}
 
-	instructions, mcp, b, found := parseOpenCodeJSON(filepath.Join(projectDir, "opencode.json"))
+	instructions, mcp, b, found := parseOpenCodeJSON(resolvePath(filepath.Join(projectDir, "opencode.json")))
 	if found {
 		r.Skills += instructions
 		r.MCP += mcp
@@ -358,14 +332,14 @@ func scanCodex(projectDir, homeDir string) AgentResult {
 	var bytes int64
 
 	if homeDir != "" {
-		homeAgents := filepath.Join(homeDir, ".codex", "AGENTS.md")
+		homeAgents := resolvePath(filepath.Join(homeDir, ".codex", "AGENTS.md"))
 		if _, err := os.Stat(homeAgents); err == nil {
 			r.Skills++
 			r.Sources = append(r.Sources, "~/.codex/AGENTS.md (advisory)")
 		}
 		bytes += fileBytes(homeAgents)
 
-		homeSkillsDir := filepath.Join(homeDir, ".codex", "skills")
+		homeSkillsDir := resolvePath(filepath.Join(homeDir, ".codex", "skills"))
 		homeSkillCount := countSkillDirs(homeSkillsDir)
 		r.Skills += homeSkillCount
 		if homeSkillCount > 0 {
@@ -373,7 +347,7 @@ func scanCodex(projectDir, homeDir string) AgentResult {
 		}
 		bytes += dirBytesRecursive(homeSkillsDir)
 
-		configPath := filepath.Join(homeDir, ".codex", "config.toml")
+		configPath := resolvePath(filepath.Join(homeDir, ".codex", "config.toml"))
 		mcpCount := parseCodexTOMLMCP(configPath)
 		if mcpCount > 0 {
 			r.MCP += mcpCount
@@ -382,14 +356,14 @@ func scanCodex(projectDir, homeDir string) AgentResult {
 		bytes += fileBytes(configPath)
 	}
 
-	agentsPath := filepath.Join(projectDir, "AGENTS.md")
+	agentsPath := resolvePath(filepath.Join(projectDir, "AGENTS.md"))
 	if _, err := os.Stat(agentsPath); err == nil {
 		r.Skills++
 		r.Sources = append(r.Sources, "AGENTS.md (advisory)")
 	}
 	bytes += fileBytes(agentsPath)
 
-	codexDir := filepath.Join(projectDir, ".codex")
+	codexDir := resolvePath(filepath.Join(projectDir, ".codex"))
 	count := countFiles(codexDir)
 	if count > 0 {
 		r.Skills += count
@@ -409,7 +383,7 @@ func scanQwen(_ string, homeDir string) AgentResult {
 		return r
 	}
 
-	homeSkillsDir := filepath.Join(homeDir, ".qwen", "skills")
+	homeSkillsDir := resolvePath(filepath.Join(homeDir, ".qwen", "skills"))
 	homeCount := countSkillDirs(homeSkillsDir)
 	r.Skills += homeCount
 	if homeCount > 0 {
@@ -417,7 +391,7 @@ func scanQwen(_ string, homeDir string) AgentResult {
 	}
 	bytes += dirBytesRecursive(homeSkillsDir)
 
-	cfgPath := filepath.Join(homeDir, ".qwen", "settings.json")
+	cfgPath := resolvePath(filepath.Join(homeDir, ".qwen", "settings.json"))
 	mcpCount := parseMCPServers(cfgPath)
 	if mcpCount > 0 {
 		r.MCP = mcpCount
@@ -437,7 +411,7 @@ func scanOpenClaw(_ string, homeDir string) AgentResult {
 		return r
 	}
 
-	homeSkillsDir := filepath.Join(homeDir, ".openclaw", "skills")
+	homeSkillsDir := resolvePath(filepath.Join(homeDir, ".openclaw", "skills"))
 	homeCount := countSkillDirs(homeSkillsDir)
 	r.Skills += homeCount
 	if homeCount > 0 {
@@ -445,7 +419,7 @@ func scanOpenClaw(_ string, homeDir string) AgentResult {
 	}
 	bytes += dirBytesRecursive(homeSkillsDir)
 
-	cfgPath := filepath.Join(homeDir, ".openclaw", "openclaw.json")
+	cfgPath := resolvePath(filepath.Join(homeDir, ".openclaw", "openclaw.json"))
 	mcpCount := parseMCPServers(cfgPath)
 	if mcpCount > 0 {
 		r.MCP += mcpCount
@@ -453,7 +427,7 @@ func scanOpenClaw(_ string, homeDir string) AgentResult {
 	}
 	bytes += fileBytes(cfgPath)
 
-	mcporterPath := filepath.Join(homeDir, ".openclaw", "config", "mcporter.json")
+	mcporterPath := resolvePath(filepath.Join(homeDir, ".openclaw", "config", "mcporter.json"))
 	mcporterCount := parseMCPServers(mcporterPath)
 	if mcporterCount > 0 {
 		r.MCP += mcporterCount
@@ -470,7 +444,7 @@ func scanWindsurf(projectDir, homeDir string) AgentResult {
 	var bytes int64
 
 	// Project: .windsurfrules (single file).
-	rulesFile := filepath.Join(projectDir, ".windsurfrules")
+	rulesFile := resolvePath(filepath.Join(projectDir, ".windsurfrules"))
 	if fb := fileBytes(rulesFile); fb > 0 {
 		r.Skills++
 		r.Sources = append(r.Sources, ".windsurfrules")
@@ -478,7 +452,7 @@ func scanWindsurf(projectDir, homeDir string) AgentResult {
 	}
 
 	// Project: .windsurf/rules/ (directory of rule files).
-	projRulesDir := filepath.Join(projectDir, ".windsurf", "rules")
+	projRulesDir := resolvePath(filepath.Join(projectDir, ".windsurf", "rules"))
 	projCount := countFiles(projRulesDir)
 	if projCount > 0 {
 		r.Skills += projCount
@@ -488,7 +462,7 @@ func scanWindsurf(projectDir, homeDir string) AgentResult {
 
 	if homeDir != "" {
 		// Global: ~/.windsurf/rules/.
-		homeRulesDir := filepath.Join(homeDir, ".windsurf", "rules")
+		homeRulesDir := resolvePath(filepath.Join(homeDir, ".windsurf", "rules"))
 		homeCount := countFiles(homeRulesDir)
 		if homeCount > 0 {
 			r.Skills += homeCount
@@ -497,7 +471,7 @@ func scanWindsurf(projectDir, homeDir string) AgentResult {
 		bytes += dirBytes(homeRulesDir)
 
 		// MCP: ~/.codeium/windsurf/mcp_config.json.
-		mcpPath := filepath.Join(homeDir, ".codeium", "windsurf", "mcp_config.json")
+		mcpPath := resolvePath(filepath.Join(homeDir, ".codeium", "windsurf", "mcp_config.json"))
 		mcpCount := parseMCPServers(mcpPath)
 		if mcpCount > 0 {
 			r.MCP += mcpCount
@@ -515,7 +489,7 @@ func scanAider(projectDir, homeDir string) AgentResult {
 	var bytes int64
 
 	// Project: .aider.conf.yml.
-	projConf := filepath.Join(projectDir, ".aider.conf.yml")
+	projConf := resolvePath(filepath.Join(projectDir, ".aider.conf.yml"))
 	if fb := fileBytes(projConf); fb > 0 {
 		r.Skills++
 		r.Sources = append(r.Sources, ".aider.conf.yml (advisory)")
@@ -524,7 +498,7 @@ func scanAider(projectDir, homeDir string) AgentResult {
 
 	if homeDir != "" {
 		// Global: ~/.aider.conf.yml.
-		homeConf := filepath.Join(homeDir, ".aider.conf.yml")
+		homeConf := resolvePath(filepath.Join(homeDir, ".aider.conf.yml"))
 		if fb := fileBytes(homeConf); fb > 0 {
 			r.Skills++
 			r.Sources = append(r.Sources, "~/.aider.conf.yml (advisory)")
@@ -542,7 +516,7 @@ func scanContinue(projectDir, homeDir string) AgentResult {
 
 	if homeDir != "" {
 		// Global: ~/.continue/config.yaml.
-		yamlConf := filepath.Join(homeDir, ".continue", "config.yaml")
+		yamlConf := resolvePath(filepath.Join(homeDir, ".continue", "config.yaml"))
 		if fb := fileBytes(yamlConf); fb > 0 {
 			r.Skills++
 			r.Sources = append(r.Sources, "~/.continue/config.yaml (advisory)")
@@ -550,7 +524,7 @@ func scanContinue(projectDir, homeDir string) AgentResult {
 		}
 
 		// Global: ~/.continue/config.json (deprecated).
-		jsonConf := filepath.Join(homeDir, ".continue", "config.json")
+		jsonConf := resolvePath(filepath.Join(homeDir, ".continue", "config.json"))
 		if fb := fileBytes(jsonConf); fb > 0 {
 			r.Skills++
 			r.Sources = append(r.Sources, "~/.continue/config.json (advisory)")
@@ -559,7 +533,7 @@ func scanContinue(projectDir, homeDir string) AgentResult {
 	}
 
 	// Project: .continuerc.json.
-	projConf := filepath.Join(projectDir, ".continuerc.json")
+	projConf := resolvePath(filepath.Join(projectDir, ".continuerc.json"))
 	if fb := fileBytes(projConf); fb > 0 {
 		r.Skills++
 		r.Sources = append(r.Sources, ".continuerc.json (advisory)")
@@ -575,7 +549,7 @@ func scanCopilot(projectDir, _ string) AgentResult {
 	var bytes int64
 
 	// Project: .github/copilot-instructions.md.
-	instrFile := filepath.Join(projectDir, ".github", "copilot-instructions.md")
+	instrFile := resolvePath(filepath.Join(projectDir, ".github", "copilot-instructions.md"))
 	if fb := fileBytes(instrFile); fb > 0 {
 		r.Skills++
 		r.Sources = append(r.Sources, ".github/copilot-instructions.md")
