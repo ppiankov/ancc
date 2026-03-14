@@ -21,7 +21,14 @@ func ParseFile(path string) (*SkillFile, error) {
 	if err != nil {
 		return nil, fmt.Errorf("reading skill file: %w", err)
 	}
-	return Parse(string(data))
+	content := string(data)
+	sf, err := Parse(content)
+	if err != nil {
+		return nil, err
+	}
+	sf.LineCount = len(strings.Split(content, "\n"))
+	sf.Path = path
+	return sf, nil
 }
 
 // Parse parses SKILL.md content into a structured representation.
@@ -29,6 +36,7 @@ func Parse(content string) (*SkillFile, error) {
 	lines := strings.Split(content, "\n")
 	sf := &SkillFile{
 		Sections: make(map[string]*Section),
+		LineCount: len(lines),
 	}
 
 	// Extract H1 name and description.
