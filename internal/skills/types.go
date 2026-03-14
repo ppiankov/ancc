@@ -1,5 +1,8 @@
 package skills
 
+// AgentName is the type for agent identifiers.
+type AgentName = string
+
 // Agent name constants.
 const (
 	AgentClaudeCode = "claude-code"

@@ -20,6 +20,7 @@ func newRootCmd(version string) *cobra.Command {
 	cmd.AddCommand(newScanCmd())
 	cmd.AddCommand(newContextCmd())
 	cmd.AddCommand(newDiffCmd())
+	cmd.AddCommand(newExportCmd())
 
 	return cmd
 }
