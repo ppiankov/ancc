@@ -397,7 +397,7 @@ ancc doctor --format json | jq '.status'
 | claude-code | `~/.claude/settings.json`, `~/.claude/skills/`, `~/.claude/CLAUDE.md`, `.claude/skills/`, `.claude/settings.local.json`, `CLAUDE.md`, `CLAUDE.local.md` | No |
 | cline | `~/.cline/skills/`, `.clinerules/` | No |
 | cursor | `.cursor/rules/*.mdc`, `~/.cursor/mcp.json` | No |
-| opencode | `~/.config/opencode/opencode.json`, `opencode.json` (project) | Yes |
+| opencode | `~/.config/opencode/opencode.json`, `~/.config/opencode/commands/`, `~/.config/opencode/skills/`, `opencode.json` (project) | Yes |
 | codex | `~/.codex/AGENTS.md`, `~/.codex/skills/`, `~/.codex/config.toml`, `AGENTS.md`, `.codex/` | Yes |
 | qwen | `~/.qwen/skills/`, `~/.qwen/settings.json` | Yes |
 | openclaw | `~/.openclaw/skills/`, `~/.openclaw/openclaw.json`, `~/.openclaw/config/mcporter.json` | Yes |
@@ -405,5 +405,6 @@ ancc doctor --format json | jq '.status'
 | aider | `.aider.conf.yml`, `~/.aider.conf.yml` | Yes |
 | continue | `~/.continue/config.yaml`, `~/.continue/config.json`, `.continuerc.json` | Yes |
 | copilot | `.github/copilot-instructions.md` | No |
+| kilocode | `~/.kilocode/skills/`, `~/.config/kilo/opencode.json`, `.kilocode/rules/`, `.kilocode/skills/` | No |
 
 Advisory agents are detected but not considered primary — their config paths are labeled accordingly in output.
