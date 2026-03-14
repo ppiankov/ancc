@@ -45,11 +45,12 @@ func Validate(path string) (*ValidationResult, error) {
 			pass(CheckExitCodesNumeric, "SKILL.md not found"),
 			pass(CheckCommandsNotPlaceholder, "SKILL.md not found"),
 			pass(CheckInstallHasCommand, "SKILL.md not found"),
-			pass(CheckTriggersActionable, "SKILL.md not found"),
-			pass(CheckToolsReferenceReal, "SKILL.md not found"),
+			// Semantic quality checks.
+			pass(CheckTriggerActionable, "SKILL.md not found"),
+			pass(CheckToolReferencesValid, "SKILL.md not found"),
 			pass(CheckInstructionsSpecific, "SKILL.md not found"),
-			pass(CheckSkillFileNotTooLarge, "SKILL.md not found"),
-			pass(CheckSkillNameNotDuplicate, "SKILL.md not found"),
+			pass(CheckSkillLineCount, "SKILL.md not found"),
+			pass(CheckDuplicateSkillNames, "SKILL.md not found"),
 		)
 		computeSummary(result)
 		return result, nil
@@ -78,12 +79,11 @@ func Validate(path string) (*ValidationResult, error) {
 		checkExitCodesNumeric(sf),
 		checkCommandsNotPlaceholder(sf),
 		checkInstallHasCommand(sf),
-		// Agent SKILL.md semantic quality checks.
-		checkTriggersActionable(sf),
-		checkToolsReferenceReal(sf),
+		checkTriggerActionable(sf),
+		checkToolReferencesValid(sf),
 		checkInstructionsSpecific(sf),
-		checkSkillFileNotTooLarge(sf),
-		checkSkillNameNotDuplicate(sf, nil),
+		checkSkillLineCount(skillPath),
+		checkDuplicateSkillNames(path),
 	)
 
 	computeSummary(result)
@@ -120,11 +120,12 @@ func validateGitHubWithClient(client *gitHubClient, owner, repo string) (*Valida
 			pass(CheckExitCodesNumeric, "SKILL.md not found"),
 			pass(CheckCommandsNotPlaceholder, "SKILL.md not found"),
 			pass(CheckInstallHasCommand, "SKILL.md not found"),
-			pass(CheckTriggersActionable, "SKILL.md not found"),
-			pass(CheckToolsReferenceReal, "SKILL.md not found"),
+			// Semantic quality checks.
+			pass(CheckTriggerActionable, "SKILL.md not found"),
+			pass(CheckToolReferencesValid, "SKILL.md not found"),
 			pass(CheckInstructionsSpecific, "SKILL.md not found"),
-			pass(CheckSkillFileNotTooLarge, "SKILL.md not found"),
-			pass(CheckSkillNameNotDuplicate, "SKILL.md not found"),
+			pass(CheckSkillLineCount, "SKILL.md not found"),
+			pass(CheckDuplicateSkillNames, "SKILL.md not found"),
 		)
 		// Still check binary releases.
 		result.Checks = append(result.Checks, checkBinaryReleaseGitHub(client, owner, repo))
@@ -156,12 +157,12 @@ func validateGitHubWithClient(client *gitHubClient, owner, repo string) (*Valida
 		checkExitCodesNumeric(sf),
 		checkCommandsNotPlaceholder(sf),
 		checkInstallHasCommand(sf),
-		// Agent SKILL.md semantic quality checks.
-		checkTriggersActionable(sf),
-		checkToolsReferenceReal(sf),
+		checkTriggerActionable(sf),
+		checkToolReferencesValid(sf),
 		checkInstructionsSpecific(sf),
-		checkSkillFileNotTooLarge(sf),
-		checkSkillNameNotDuplicate(sf, nil),
+		// Note: line count and duplicate checks require filesystem access.
+		pass(CheckSkillLineCount, "GitHub validation cannot check line count"),
+		pass(CheckDuplicateSkillNames, "GitHub validation cannot check duplicates"),
 	)
 
 	computeSummary(result)

@@ -27,12 +27,12 @@ const (
 	CheckExitCodesNumeric       = "exit-codes-numeric"
 	CheckCommandsNotPlaceholder = "commands-not-placeholder"
 	CheckInstallHasCommand      = "install-has-command"
-	// Semantic quality checks for agent SKILL.md files.
-	CheckTriggersActionable     = "triggers-actionable"
-	CheckToolsReferenceReal     = "tools-reference-real"
-	CheckInstructionsSpecific   = "instructions-specific"
-	CheckSkillFileNotTooLarge   = "skill-file-not-too-large"
-	CheckSkillNameNotDuplicate  = "skill-name-not-duplicate"
+	// Semantic quality checks.
+	CheckTriggerActionable    = "trigger-actionable"
+	CheckToolReferencesValid  = "tool-references-valid"
+	CheckInstructionsSpecific = "instructions-specific"
+	CheckSkillLineCount       = "skill-line-count"
+	CheckDuplicateSkillNames  = "duplicate-skill-names"
 )
 
 func pass(name, msg string) CheckResult {
@@ -264,154 +264,308 @@ func checkInstallHasCommand(sf *skillmd.SkillFile) CheckResult {
 	return warn(CheckInstallHasCommand, "Install section has no recognizable install command")
 }
 
-// --- Semantic quality checks for agent SKILL.md files ---
+// --- Semantic quality checks for SKILL.md ---
 
-// vagueTriggerPatterns are phrases that indicate non-actionable triggers.
-var vagueTriggerPatterns = []string{
-	"when needed",
-	"when appropriate",
-	"as needed",
-	"if necessary",
-	"when relevant",
-	"when suitable",
-	"at discretion",
-	"when required",
-	"when useful",
-}
-
-// checkTriggersActionable verifies trigger sections contain actionable conditions.
-// Warns if triggers use vague language like "when needed" or "as appropriate".
-func checkTriggersActionable(sf *skillmd.SkillFile) CheckResult {
-	// Look for trigger-related sections.
-	triggerSections := []string{"When to Use", "Triggers", "When to Use This Skill", "Usage Triggers"}
-	var content string
-	for _, name := range triggerSections {
-		if section, ok := sf.Sections[name]; ok {
-			content = section.Content
-			break
-		}
-	}
-	if content == "" {
-		return pass(CheckTriggersActionable, "no trigger section found (may not apply)")
-	}
-
-	lower := strings.ToLower(content)
-	for _, pattern := range vagueTriggerPatterns {
-		if strings.Contains(lower, pattern) {
-			return warn(CheckTriggersActionable,
-				fmt.Sprintf("trigger section contains vague condition %q", pattern))
-		}
-	}
-	return pass(CheckTriggersActionable, "trigger conditions appear actionable")
-}
-
-// knownMCPPrefixes are recognized MCP tool prefixes.
-var knownMCPPrefixes = []string{
-	"pastewatch", "contextspectre", "tokencontrol", "workledger",
-	"notion", "github", "slack", "linear", "jira", "confluence",
-	"postgres", "mysql", "redis", "mongodb", "sqlite",
-	"filesystem", "puppeteer", "playwright", "selenium",
-	"docker", "kubernetes", "kubectl", "helm",
-	"aws", "gcp", "azure", "cloudflare",
-	"stripe", "sendgrid", "twilio", "slack",
-	"git", "npm", "pip", "cargo", "go",
-}
-
-// suspiciousToolPatterns indicate potentially fake tool names.
-var suspiciousToolPatterns = []string{
-	"my-mcp", "example-mcp", "placeholder", "your-mcp",
-	"<mcp", "${mcp", "{{mcp", "todo", "FIXME", "XXX",
-}
-
-// checkToolsReferenceReal verifies tool lists reference real MCP tools or CLI commands.
-// Warns on suspicious names that look like placeholders.
-func checkToolsReferenceReal(sf *skillmd.SkillFile) CheckResult {
-	// Look for tools-related sections.
-	toolSections := []string{"Tools", "MCP Tools", "MCP Servers", "Commands", "Integrations"}
-	var content string
-	for _, name := range toolSections {
-		if section, ok := sf.Sections[name]; ok {
-			content = section.Content
-			break
-		}
-	}
-	if content == "" {
-		return pass(CheckToolsReferenceReal, "no tools section found (may not apply)")
-	}
-
-	lower := strings.ToLower(content)
-	for _, pattern := range suspiciousToolPatterns {
-		if strings.Contains(lower, strings.ToLower(pattern)) {
-			return warn(CheckToolsReferenceReal,
-				fmt.Sprintf("tools section contains suspicious name %q", pattern))
-		}
-	}
-	return pass(CheckToolsReferenceReal, "tool names appear valid")
-}
-
-// vagueInstructionPatterns are phrases that indicate non-specific instructions.
-var vagueInstructionPatterns = []string{
+// vaguePhrases are phrases that indicate overly vague instructions.
+var vaguePhrases = []string{
 	"handle appropriately",
-	"deal with it",
-	"manage accordingly",
+	"as needed",
+	"when needed",
 	"as appropriate",
-	"use your judgment",
-	"decide based on context",
-	"handle as needed",
-	"take care of",
-	"sort it out",
-	"figure it out",
-	"do what's best",
-	"apply best practices",
-	"follow conventions",
+	"if necessary",
+	"if needed",
+	"as required",
+	"properly",
+	"correctly",
+	"appropriately",
+	"relevant",
+	"suitable",
+	"adequate",
 }
 
-// checkInstructionsSpecific verifies instructions are specific enough.
-// Warns on overly vague instructions like "handle appropriately".
-func checkInstructionsSpecific(sf *skillmd.SkillFile) CheckResult {
-	// Look for instruction-related sections.
-	instructionSections := []string{"Instructions", "How to Use", "Usage", "Procedure", "Steps"}
-	var content string
-	for _, name := range instructionSections {
-		if section, ok := sf.Sections[name]; ok {
-			content = section.Content
+// actionablePatterns are patterns that indicate actionable trigger conditions.
+var actionablePatterns = []string{
+	"when ",
+	"if ",
+	"before ",
+	"after ",
+	"during ",
+	"on ",
+	"upon ",
+	"whenever ",
+	"each time ",
+	"every time ",
+}
+
+// checkTriggerActionable verifies that trigger sections contain actionable conditions.
+// Warns if triggers use vague language like "when needed" instead of specific conditions.
+func checkTriggerActionable(sf *skillmd.SkillFile) CheckResult {
+	// Look for sections that might contain triggers (e.g., "When to use", "Triggers", "Usage").
+	triggerHeadings := []string{"when", "trigger", "usage", "when to use", "triggers"}
+
+	var foundTrigger bool
+	var hasVagueTrigger bool
+	var vagueExample string
+
+	for heading, section := range sf.Sections {
+		headingLower := strings.ToLower(heading)
+		isTriggerSection := false
+		for _, th := range triggerHeadings {
+			if strings.Contains(headingLower, th) {
+				isTriggerSection = true
+				break
+			}
+		}
+		if !isTriggerSection {
+			continue
+		}
+
+		foundTrigger = true
+		contentLower := strings.ToLower(section.Content)
+
+		// Check if the section contains vague phrases.
+		for _, phrase := range vaguePhrases {
+			if strings.Contains(contentLower, phrase) {
+				hasVagueTrigger = true
+				vagueExample = phrase
+				break
+			}
+		}
+
+		// Check if the section contains actionable patterns.
+		hasActionable := false
+		for _, pattern := range actionablePatterns {
+			if strings.Contains(contentLower, pattern) {
+				hasActionable = true
+				break
+			}
+		}
+
+		// If no actionable pattern and has vague phrase, warn.
+		if !hasActionable && hasVagueTrigger {
 			break
 		}
 	}
-	if content == "" {
-		return pass(CheckInstructionsSpecific, "no instructions section found (may not apply)")
-	}
 
-	lower := strings.ToLower(content)
-	for _, pattern := range vagueInstructionPatterns {
-		if strings.Contains(lower, pattern) {
-			return warn(CheckInstructionsSpecific,
-				fmt.Sprintf("instructions contain vague phrase %q", pattern))
+	if !foundTrigger {
+		return pass(CheckTriggerActionable, "no trigger section found (optional)")
+	}
+	if hasVagueTrigger {
+		return warn(CheckTriggerActionable, fmt.Sprintf("trigger section contains vague phrase %q", vagueExample))
+	}
+	return pass(CheckTriggerActionable, "trigger conditions are actionable")
+}
+
+// knownMCPServers is a list of known MCP server names for validation.
+var knownMCPServers = []string{
+	"pastewatch", "contextspectre", "tokencontrol", "workledger",
+	"filesystem", "git", "github", "memory", "time", "puppeteer",
+	"playwright", "postgres", "sqlite", "redis", "notion", "slack",
+	"google-maps", "google-drive", "dropbox", "figma", "linear",
+	"jira", "confluence", "stripe", "sendgrid", "twilio",
+}
+
+// knownCLICommands is a list of known CLI command prefixes.
+var knownCLICommands = []string{
+	"brew ", "go ", "npm ", "pip ", "cargo ", "apt ", "yum ",
+	"dnf ", "curl ", "wget ", "docker ", "snap ", "git ", "gh ",
+	"aws ", "gcloud ", "az ", "kubectl ", "helm ", "terraform ",
+	"ansible ", "node ", "python ", "ruby ", "java ", "mvn ",
+	"gradle ", "make ", "cmake ", "gcc ", "clang ", "rustc ",
+}
+
+// checkToolReferencesValid verifies that tool lists reference real MCP tools or CLI commands.
+// Warns on suspicious names that don't match known patterns.
+func checkToolReferencesValid(sf *skillmd.SkillFile) CheckResult {
+	// Look for sections that might contain tool references.
+	toolHeadings := []string{"tools", "mcp", "servers", "integrations", "dependencies", "requirements"}
+
+	var foundTools bool
+	var suspiciousTools []string
+
+	for heading, section := range sf.Sections {
+		headingLower := strings.ToLower(heading)
+		isToolSection := false
+		for _, th := range toolHeadings {
+			if strings.Contains(headingLower, th) {
+				isToolSection = true
+				break
+			}
+		}
+		if !isToolSection {
+			continue
+		}
+
+		foundTools = true
+
+		// Extract potential tool names from the section content.
+		lines := strings.Split(section.Content, "\n")
+		for _, line := range lines {
+			trimmed := strings.TrimSpace(line)
+			// Look for list items or code references.
+			if strings.HasPrefix(trimmed, "- ") || strings.HasPrefix(trimmed, "* ") ||
+				strings.HasPrefix(trimmed, "`") || strings.HasPrefix(trimmed, "- `") {
+				// Extract potential tool name.
+				name := strings.TrimPrefix(trimmed, "- ")
+				name = strings.TrimPrefix(name, "* ")
+				name = strings.TrimPrefix(name, "`")
+				name = strings.TrimSuffix(name, "`")
+				name = strings.TrimSpace(name)
+				// Remove leading dash if present (from "- `tool`" pattern).
+				name = strings.TrimPrefix(name, "- `")
+				name = strings.TrimSuffix(name, "`")
+				name = strings.TrimSpace(name)
+
+				if name == "" || len(name) < 2 {
+					continue
+				}
+
+				// Check if it matches known patterns.
+				isKnown := false
+				nameLower := strings.ToLower(name)
+
+				// Check against known MCP servers.
+				for _, known := range knownMCPServers {
+					if strings.Contains(nameLower, known) || strings.Contains(known, nameLower) {
+						isKnown = true
+						break
+					}
+				}
+
+				// Check against known CLI commands.
+				if !isKnown {
+					for _, known := range knownCLICommands {
+						if strings.HasPrefix(nameLower, strings.TrimSpace(known)) {
+							isKnown = true
+							break
+						}
+					}
+				}
+
+				// Check if it looks like a valid tool name (alphanumeric with dashes/underscores).
+				if !isKnown {
+					validName := true
+					for _, r := range name {
+						if !((r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') ||
+							(r >= '0' && r <= '9') || r == '-' || r == '_' || r == '/') {
+							validName = false
+							break
+						}
+					}
+					if validName && len(name) > 2 {
+						// Looks like a valid name, just not in our known list.
+						isKnown = true
+					}
+				}
+
+				if !isKnown {
+					suspiciousTools = append(suspiciousTools, name)
+				}
+			}
 		}
 	}
-	return pass(CheckInstructionsSpecific, "instructions appear specific")
+
+	if !foundTools {
+		return pass(CheckToolReferencesValid, "no tool section found (optional)")
+	}
+	if len(suspiciousTools) > 0 {
+		return warn(CheckToolReferencesValid, fmt.Sprintf("suspicious tool names: %v", suspiciousTools))
+	}
+	return pass(CheckToolReferencesValid, "all tool references look valid")
 }
 
-// checkSkillFileNotTooLarge warns if a skill file exceeds 500 lines.
-// Large skill files are likely too complex and should be split.
-func checkSkillFileNotTooLarge(sf *skillmd.SkillFile) CheckResult {
-	if sf.LineCount > 500 {
-		return warn(CheckSkillFileNotTooLarge,
-			fmt.Sprintf("skill file has %d lines (consider splitting if >500)", sf.LineCount))
+// checkInstructionsSpecific verifies that instructions are specific and not overly vague.
+// Warns on phrases like "handle appropriately" that don't provide actionable guidance.
+func checkInstructionsSpecific(sf *skillmd.SkillFile) CheckResult {
+	var vagueLocations []string
+
+	for heading, section := range sf.Sections {
+		contentLower := strings.ToLower(section.Content)
+		for _, phrase := range vaguePhrases {
+			if strings.Contains(contentLower, phrase) {
+				vagueLocations = append(vagueLocations, fmt.Sprintf("%s: %q", heading, phrase))
+				break
+			}
+		}
 	}
-	return pass(CheckSkillFileNotTooLarge, fmt.Sprintf("skill file size (%d lines) is reasonable", sf.LineCount))
+
+	if len(vagueLocations) == 0 {
+		return pass(CheckInstructionsSpecific, "no vague instructions found")
+	}
+	return warn(CheckInstructionsSpecific, fmt.Sprintf("vague instructions: %v", vagueLocations))
 }
 
-// checkSkillNameNotDuplicate checks for duplicate skill names.
-// This check requires external context (other skill files) and is a placeholder
-// for batch validation scenarios. For single-file validation, it always passes.
-func checkSkillNameNotDuplicate(sf *skillmd.SkillFile, allSkillNames map[string]string) CheckResult {
-	if allSkillNames == nil {
-		return pass(CheckSkillNameNotDuplicate, "duplicate check skipped (no context)")
+// checkSkillLineCount warns if a skill file exceeds 500 lines.
+// Large skill files may indicate overly complex configurations.
+func checkSkillLineCount(path string) CheckResult {
+	if path == "" {
+		return pass(CheckSkillLineCount, "line count check requires file path")
 	}
-	if existingPath, ok := allSkillNames[sf.Name]; ok {
-		return warn(CheckSkillNameNotDuplicate,
-			fmt.Sprintf("skill name %q duplicates %s", sf.Name, existingPath))
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return warn(CheckSkillLineCount, fmt.Sprintf("could not read file: %v", err))
 	}
-	return pass(CheckSkillNameNotDuplicate, fmt.Sprintf("skill name %q is unique", sf.Name))
+
+	lines := strings.Count(string(data), "\n") + 1
+	if lines > 500 {
+		return warn(CheckSkillLineCount, fmt.Sprintf("skill file has %d lines (consider splitting)", lines))
+	}
+	return pass(CheckSkillLineCount, fmt.Sprintf("skill file has %d lines", lines))
+}
+
+// checkDuplicateSkillNames warns on duplicate skill names across agent configs.
+// This requires scanning the repository for multiple SKILL.md files.
+func checkDuplicateSkillNames(repoPath string) CheckResult {
+	if repoPath == "" {
+		return pass(CheckDuplicateSkillNames, "duplicate check requires repo path")
+	}
+
+	// Find all SKILL.md files in the repo.
+	var skillFiles []string
+	var skillNames []string
+
+	// Check root.
+	rootSkill := filepath.Join(repoPath, "SKILL.md")
+	if _, err := os.Stat(rootSkill); err == nil {
+		skillFiles = append(skillFiles, rootSkill)
+	}
+
+	// Check docs/.
+	docsSkill := filepath.Join(repoPath, "docs", "SKILL.md")
+	if _, err := os.Stat(docsSkill); err == nil {
+		skillFiles = append(skillFiles, docsSkill)
+	}
+
+	// Check for agent-specific SKILL.md files (e.g., .claude/SKILL.md, .qwen/SKILL.md).
+	agentDirs := []string{".claude", ".qwen", ".cline", ".cursor", ".codex", ".opencode"}
+	for _, dir := range agentDirs {
+		agentSkill := filepath.Join(repoPath, dir, "SKILL.md")
+		if _, err := os.Stat(agentSkill); err == nil {
+			skillFiles = append(skillFiles, agentSkill)
+		}
+	}
+
+	// Parse all found SKILL.md files and collect names.
+	nameToPath := make(map[string]string)
+	for _, sfPath := range skillFiles {
+		sf, err := skillmd.ParseFile(sfPath)
+		if err != nil {
+			continue // Skip files that can't be parsed.
+		}
+		if sf.Name != "" {
+			if existing, ok := nameToPath[sf.Name]; ok {
+				rel1, _ := filepath.Rel(repoPath, existing)
+				rel2, _ := filepath.Rel(repoPath, sfPath)
+				skillNames = append(skillNames, fmt.Sprintf("%s (%s, %s)", sf.Name, rel1, rel2))
+			} else {
+				nameToPath[sf.Name] = sfPath
+			}
+		}
+	}
+
+	if len(skillNames) > 0 {
+		return warn(CheckDuplicateSkillNames, fmt.Sprintf("duplicate skill names: %v", skillNames))
+	}
+	return pass(CheckDuplicateSkillNames, "no duplicate skill names found")
 }

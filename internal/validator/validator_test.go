@@ -1,9 +1,11 @@
 package validator
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/ppiankov/ancc/internal/skillmd"
@@ -245,14 +247,13 @@ func TestValidate_ValidFixture(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	// Should have 20 checks now (15 original + 5 semantic)
 	if result.Summary.Total != 20 {
 		t.Errorf("total = %d, want 20", result.Summary.Total)
 	}
 	if result.Summary.Fail != 0 {
 		t.Errorf("fail = %d, want 0", result.Summary.Fail)
 	}
-	// binary-release is the only warn; semantic checks pass when no relevant sections
+	// binary-release is the only warn for valid fixture (semantic checks pass).
 	if result.Summary.Warn != 1 {
 		t.Errorf("warn = %d, want 1 (binary-release skipped)", result.Summary.Warn)
 	}
@@ -510,131 +511,225 @@ func TestCheckInstallHasCommand_GoInstall(t *testing.T) {
 	}
 }
 
-// --- Semantic quality checks for agent SKILL.md files ---
+// --- New semantic quality check tests ---
 
-func TestCheckTriggersActionable_Valid(t *testing.T) {
-	sf := loadFixture(t, "valid-agent-skill.md")
-	r := checkTriggersActionable(sf)
+func TestCheckTriggerActionable_NoTriggerSection(t *testing.T) {
+	sf := &skillmd.SkillFile{
+		Name: "testtool",
+		Sections: map[string]*skillmd.Section{
+			"Install": {Heading: "Install", Content: "brew install test"},
+		},
+	}
+	r := checkTriggerActionable(sf)
 	if r.Status != StatusPass {
 		t.Errorf("status = %q, want %q; message: %s", r.Status, StatusPass, r.Message)
 	}
 }
 
-func TestCheckTriggersActionable_Vague(t *testing.T) {
-	sf := loadFixture(t, "vague-skill.md")
-	r := checkTriggersActionable(sf)
-	if r.Status != StatusWarn {
-		t.Errorf("status = %q, want %q; message: %s", r.Status, StatusWarn, r.Message)
+func TestCheckTriggerActionable_ActionableTrigger(t *testing.T) {
+	sf := &skillmd.SkillFile{
+		Name: "testtool",
+		Sections: map[string]*skillmd.Section{
+			"When to use": {
+				Heading: "When to use",
+				Content: "Use this tool when you need to validate SKILL.md files.",
+			},
+		},
 	}
-}
-
-func TestCheckTriggersActionable_NoSection(t *testing.T) {
-	sf := &skillmd.SkillFile{Sections: map[string]*skillmd.Section{}}
-	r := checkTriggersActionable(sf)
-	if r.Status != StatusPass {
-		t.Errorf("status = %q, want %q (no trigger section)", r.Status, StatusPass)
-	}
-}
-
-func TestCheckToolsReferenceReal_Valid(t *testing.T) {
-	sf := loadFixture(t, "valid-agent-skill.md")
-	r := checkToolsReferenceReal(sf)
+	r := checkTriggerActionable(sf)
 	if r.Status != StatusPass {
 		t.Errorf("status = %q, want %q; message: %s", r.Status, StatusPass, r.Message)
 	}
 }
 
-func TestCheckToolsReferenceReal_Suspicious(t *testing.T) {
-	sf := loadFixture(t, "vague-skill.md")
-	r := checkToolsReferenceReal(sf)
+func TestCheckTriggerActionable_VagueTrigger(t *testing.T) {
+	sf := &skillmd.SkillFile{
+		Name: "testtool",
+		Sections: map[string]*skillmd.Section{
+			"When to use": {
+				Heading: "When to use",
+				Content: "Use this tool when needed for validation.",
+			},
+		},
+	}
+	r := checkTriggerActionable(sf)
+	if r.Status != StatusWarn {
+		t.Errorf("status = %q, want %q; message: %s", r.Status, StatusWarn, r.Message)
+	}
+	if !strings.Contains(r.Message, "when needed") {
+		t.Errorf("message = %q, want to contain %q", r.Message, "when needed")
+	}
+}
+
+func TestCheckToolReferencesValid_NoToolSection(t *testing.T) {
+	sf := &skillmd.SkillFile{
+		Name: "testtool",
+		Sections: map[string]*skillmd.Section{
+			"Install": {Heading: "Install", Content: "brew install test"},
+		},
+	}
+	r := checkToolReferencesValid(sf)
+	if r.Status != StatusPass {
+		t.Errorf("status = %q, want %q; message: %s", r.Status, StatusPass, r.Message)
+	}
+}
+
+func TestCheckToolReferencesValid_KnownTools(t *testing.T) {
+	sf := &skillmd.SkillFile{
+		Name: "testtool",
+		Sections: map[string]*skillmd.Section{
+			"Tools": {
+				Heading: "Tools",
+				Content: "- `pastewatch` - scan for secrets\n- `git` - version control",
+			},
+		},
+	}
+	r := checkToolReferencesValid(sf)
+	if r.Status != StatusPass {
+		t.Errorf("status = %q, want %q; message: %s", r.Status, StatusPass, r.Message)
+	}
+}
+
+func TestCheckToolReferencesValid_SuspiciousTools(t *testing.T) {
+	sf := &skillmd.SkillFile{
+		Name: "testtool",
+		Sections: map[string]*skillmd.Section{
+			"Tools": {
+				Heading: "Tools",
+				Content: "- `@@@invalid@@@` - suspicious tool\n- `xyz123!@#` - another suspicious tool",
+			},
+		},
+	}
+	r := checkToolReferencesValid(sf)
 	if r.Status != StatusWarn {
 		t.Errorf("status = %q, want %q; message: %s", r.Status, StatusWarn, r.Message)
 	}
 }
 
-func TestCheckToolsReferenceReal_NoSection(t *testing.T) {
-	sf := &skillmd.SkillFile{Sections: map[string]*skillmd.Section{}}
-	r := checkToolsReferenceReal(sf)
-	if r.Status != StatusPass {
-		t.Errorf("status = %q, want %q (no tools section)", r.Status, StatusPass)
+func TestCheckInstructionsSpecific_NoVagueInstructions(t *testing.T) {
+	sf := &skillmd.SkillFile{
+		Name: "testtool",
+		Sections: map[string]*skillmd.Section{
+			"Usage": {
+				Heading: "Usage",
+				Content: "Run the tool with --format json to get structured output.",
+			},
+		},
 	}
-}
-
-func TestCheckInstructionsSpecific_Valid(t *testing.T) {
-	sf := loadFixture(t, "valid-agent-skill.md")
 	r := checkInstructionsSpecific(sf)
 	if r.Status != StatusPass {
 		t.Errorf("status = %q, want %q; message: %s", r.Status, StatusPass, r.Message)
 	}
 }
 
-func TestCheckInstructionsSpecific_Vague(t *testing.T) {
-	sf := loadFixture(t, "vague-skill.md")
+func TestCheckInstructionsSpecific_VagueInstructions(t *testing.T) {
+	sf := &skillmd.SkillFile{
+		Name: "testtool",
+		Sections: map[string]*skillmd.Section{
+			"Usage": {
+				Heading: "Usage",
+				Content: "Handle errors appropriately as needed.",
+			},
+		},
+	}
 	r := checkInstructionsSpecific(sf)
 	if r.Status != StatusWarn {
 		t.Errorf("status = %q, want %q; message: %s", r.Status, StatusWarn, r.Message)
 	}
-}
-
-func TestCheckInstructionsSpecific_NoSection(t *testing.T) {
-	sf := &skillmd.SkillFile{Sections: map[string]*skillmd.Section{}}
-	r := checkInstructionsSpecific(sf)
-	if r.Status != StatusPass {
-		t.Errorf("status = %q, want %q (no instructions section)", r.Status, StatusPass)
+	if !strings.Contains(r.Message, "as needed") && !strings.Contains(r.Message, "handle appropriately") {
+		t.Errorf("message = %q, want to contain vague phrase", r.Message)
 	}
 }
 
-func TestCheckSkillFileNotTooLarge_WithinLimit(t *testing.T) {
-	sf := loadFixture(t, "valid-agent-skill.md")
-	r := checkSkillFileNotTooLarge(sf)
-	if r.Status != StatusPass {
-		t.Errorf("status = %q, want %q; message: %s", r.Status, StatusPass, r.Message)
-	}
-}
-
-func TestCheckSkillFileNotTooLarge_ExceedsLimit(t *testing.T) {
-	sf := loadFixture(t, "large-skill.md")
-	r := checkSkillFileNotTooLarge(sf)
-	if r.Status != StatusWarn {
-		t.Errorf("status = %q, want %q; message: %s", r.Status, StatusWarn, r.Message)
-	}
-}
-
-func TestCheckSkillNameNotDuplicate_Unique(t *testing.T) {
-	sf := loadFixture(t, "valid-agent-skill.md")
-	allSkillNames := map[string]string{
-		"other-skill": "/path/to/other/SKILL.md",
-	}
-	r := checkSkillNameNotDuplicate(sf, allSkillNames)
-	if r.Status != StatusPass {
-		t.Errorf("status = %q, want %q; message: %s", r.Status, StatusPass, r.Message)
-	}
-}
-
-func TestCheckSkillNameNotDuplicate_Duplicate(t *testing.T) {
-	sf := loadFixture(t, "valid-agent-skill.md")
-	allSkillNames := map[string]string{
-		"data-analyst": "/path/to/other/SKILL.md",
-	}
-	r := checkSkillNameNotDuplicate(sf, allSkillNames)
-	if r.Status != StatusWarn {
-		t.Errorf("status = %q, want %q; message: %s", r.Status, StatusWarn, r.Message)
-	}
-}
-
-func TestCheckSkillNameNotDuplicate_NoContext(t *testing.T) {
-	sf := loadFixture(t, "valid-agent-skill.md")
-	r := checkSkillNameNotDuplicate(sf, nil)
-	if r.Status != StatusPass {
-		t.Errorf("status = %q, want %q (skipped)", r.Status, StatusPass)
-	}
-}
-
-// --- Integration tests for Validate with semantic checks ---
-
-func TestValidate_ValidAgentSkill(t *testing.T) {
+func TestCheckSkillLineCount_SmallFile(t *testing.T) {
+	// Create a small temp file.
 	dir := t.TempDir()
-	data, err := readFile(testdataPath("valid-agent-skill.md"))
+	path := filepath.Join(dir, "SKILL.md")
+	content := "# test\n\nSmall file content.\n"
+	if err := writeFile(path, []byte(content)); err != nil {
+		t.Fatal(err)
+	}
+	r := checkSkillLineCount(path)
+	if r.Status != StatusPass {
+		t.Errorf("status = %q, want %q; message: %s", r.Status, StatusPass, r.Message)
+	}
+}
+
+func TestCheckSkillLineCount_LargeFile(t *testing.T) {
+	// Create a large temp file (>500 lines).
+	dir := t.TempDir()
+	path := filepath.Join(dir, "SKILL.md")
+	var content strings.Builder
+	content.WriteString("# test\n\n")
+	for i := 0; i < 510; i++ {
+		content.WriteString(fmt.Sprintf("Line %d of content\n", i))
+	}
+	if err := writeFile(path, []byte(content.String())); err != nil {
+		t.Fatal(err)
+	}
+	r := checkSkillLineCount(path)
+	if r.Status != StatusWarn {
+		t.Errorf("status = %q, want %q; message: %s", r.Status, StatusWarn, r.Message)
+	}
+	if !strings.Contains(r.Message, "lines (consider splitting)") {
+		t.Errorf("message = %q, want to contain line count warning", r.Message)
+	}
+}
+
+func TestCheckSkillLineCount_NoPath(t *testing.T) {
+	r := checkSkillLineCount("")
+	if r.Status != StatusPass {
+		t.Errorf("status = %q, want %q; message: %s", r.Status, StatusPass, r.Message)
+	}
+}
+
+func TestCheckDuplicateSkillNames_NoDuplicates(t *testing.T) {
+	dir := t.TempDir()
+	// Create a single SKILL.md.
+	skillContent := "# testtool\n\nA test tool.\n"
+	if err := writeFile(filepath.Join(dir, "SKILL.md"), []byte(skillContent)); err != nil {
+		t.Fatal(err)
+	}
+	r := checkDuplicateSkillNames(dir)
+	if r.Status != StatusPass {
+		t.Errorf("status = %q, want %q; message: %s", r.Status, StatusPass, r.Message)
+	}
+}
+
+func TestCheckDuplicateSkillNames_WithDuplicates(t *testing.T) {
+	dir := t.TempDir()
+	// Create two SKILL.md files with the same name.
+	skillContent := "# testtool\n\nA test tool.\n"
+	if err := writeFile(filepath.Join(dir, "SKILL.md"), []byte(skillContent)); err != nil {
+		t.Fatal(err)
+	}
+	docsDir := filepath.Join(dir, "docs")
+	if err := os.MkdirAll(docsDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := writeFile(filepath.Join(docsDir, "SKILL.md"), []byte(skillContent)); err != nil {
+		t.Fatal(err)
+	}
+	r := checkDuplicateSkillNames(dir)
+	if r.Status != StatusWarn {
+		t.Errorf("status = %q, want %q; message: %s", r.Status, StatusWarn, r.Message)
+	}
+	if !strings.Contains(r.Message, "testtool") {
+		t.Errorf("message = %q, want to contain duplicate name", r.Message)
+	}
+}
+
+func TestCheckDuplicateSkillNames_NoPath(t *testing.T) {
+	r := checkDuplicateSkillNames("")
+	if r.Status != StatusPass {
+		t.Errorf("status = %q, want %q; message: %s", r.Status, StatusPass, r.Message)
+	}
+}
+
+func TestValidate_WithSemanticChecks(t *testing.T) {
+	// Create a temp dir with a valid SKILL.md.
+	dir := t.TempDir()
+	data, err := readFile(testdataPath("valid-skill.md"))
 	if err != nil {
 		t.Fatalf("failed to read fixture: %v", err)
 	}
@@ -647,98 +742,8 @@ func TestValidate_ValidAgentSkill(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	// Should have 20 checks now (15 original + 5 semantic)
+	// Should have 20 checks now (15 original + 5 semantic).
 	if result.Summary.Total != 20 {
 		t.Errorf("total = %d, want 20", result.Summary.Total)
-	}
-
-	// Check that semantic checks passed
-	semanticChecks := []string{
-		CheckTriggersActionable,
-		CheckToolsReferenceReal,
-		CheckInstructionsSpecific,
-		CheckSkillFileNotTooLarge,
-		CheckSkillNameNotDuplicate,
-	}
-	for _, name := range semanticChecks {
-		found := false
-		for _, c := range result.Checks {
-			if c.Name == name {
-				found = true
-				if c.Status != StatusPass {
-					t.Errorf("check %q status = %q, want %q; message: %s", name, c.Status, StatusPass, c.Message)
-				}
-				break
-			}
-		}
-		if !found {
-			t.Errorf("check %q not found in results", name)
-		}
-	}
-}
-
-func TestValidate_VagueSkill(t *testing.T) {
-	dir := t.TempDir()
-	data, err := readFile(testdataPath("vague-skill.md"))
-	if err != nil {
-		t.Fatalf("failed to read fixture: %v", err)
-	}
-	if err := writeFile(filepath.Join(dir, "SKILL.md"), data); err != nil {
-		t.Fatalf("failed to write SKILL.md: %v", err)
-	}
-
-	result, err := Validate(dir)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	// Should have warnings for vague triggers, tools, and instructions
-	vagueChecks := map[string]bool{
-		CheckTriggersActionable:   false,
-		CheckToolsReferenceReal:   false,
-		CheckInstructionsSpecific: false,
-	}
-	for _, c := range result.Checks {
-		if _, ok := vagueChecks[c.Name]; ok {
-			if c.Status == StatusWarn {
-				vagueChecks[c.Name] = true
-			}
-		}
-	}
-	for name, warned := range vagueChecks {
-		if !warned {
-			t.Errorf("check %q did not warn for vague content", name)
-		}
-	}
-}
-
-func TestValidate_LargeSkill(t *testing.T) {
-	dir := t.TempDir()
-	data, err := readFile(testdataPath("large-skill.md"))
-	if err != nil {
-		t.Fatalf("failed to read fixture: %v", err)
-	}
-	if err := writeFile(filepath.Join(dir, "SKILL.md"), data); err != nil {
-		t.Fatalf("failed to write SKILL.md: %v", err)
-	}
-
-	result, err := Validate(dir)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	// Should have warning for large file
-	found := false
-	for _, c := range result.Checks {
-		if c.Name == CheckSkillFileNotTooLarge {
-			found = true
-			if c.Status != StatusWarn {
-				t.Errorf("check %q status = %q, want %q; message: %s", c.Name, c.Status, StatusWarn, c.Message)
-			}
-			break
-		}
-	}
-	if !found {
-		t.Errorf("check %q not found in results", CheckSkillFileNotTooLarge)
 	}
 }
