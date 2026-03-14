@@ -49,13 +49,16 @@ func defaultDoctorEnv(ctx context.Context, version string) *doctorEnv {
 		ctx = context.Background()
 	}
 
-	client := &http.Client{}
+	httpDo := func(req *http.Request) (*http.Response, error) {
+		client := &http.Client{}
+		return client.Do(req)
+	}
 	return &doctorEnv{
 		ctx:          ctx,
 		version:      version,
 		githubAPIURL: "https://api.github.com",
 		lookPath:     exec.LookPath,
-		httpDo:       client.Do,
+		httpDo:       httpDo,
 		getenv:       os.Getenv,
 		cmdOutput: func(name string, args ...string) ([]byte, error) {
 			return exec.Command(name, args...).Output()
