@@ -50,11 +50,17 @@ func TestExportCmd_JSONStructure(t *testing.T) {
 	for _, a := range out.Agents {
 		if a.Name == "cline" {
 			found = true
+			if a.ConfigDir == "" {
+				t.Error("expected config_dir for cline")
+			}
 			if a.Tokens == 0 {
 				t.Error("expected non-zero tokens for cline")
 			}
 			if len(a.Sources) == 0 {
 				t.Error("expected non-empty sources for cline")
+			}
+			if len(a.SkillFiles) == 0 {
+				t.Error("expected non-empty skill_files for cline")
 			}
 		}
 	}
@@ -85,6 +91,9 @@ func TestExportCmd_AgentFilter(t *testing.T) {
 	}
 	if out.Agents[0].Name != "cline" {
 		t.Errorf("expected agent name 'cline', got %q", out.Agents[0].Name)
+	}
+	if out.Agents[0].ConfigDir == "" {
+		t.Error("expected config_dir to be set")
 	}
 }
 
@@ -128,6 +137,9 @@ func TestExportCmd_YAMLFormat(t *testing.T) {
 	for _, a := range out.Agents {
 		if a.Name == "cline" {
 			found = true
+			if a.ConfigDir == "" {
+				t.Error("expected config_dir for cline in YAML output")
+			}
 		}
 	}
 	if !found {
@@ -147,5 +159,31 @@ func TestExportCmd_EmptyProject(t *testing.T) {
 	err := cmd.Execute()
 	if err == nil {
 		t.Fatal("expected error for nonexistent agent in empty project")
+	}
+}
+
+func TestExportCmd_NonExistentPath(t *testing.T) {
+	// Scan doesn't fail on nonexistent paths - it just returns empty results.
+	// However, it still scans the home directory, so we'll get agents from there.
+	// The test should verify the command succeeds (doesn't error).
+	cmd := newRootCmd("test")
+	buf := new(bytes.Buffer)
+	cmd.SetOut(buf)
+	cmd.SetErr(buf)
+	cmd.SetArgs([]string{"export", "/nonexistent/path/that/does/not/exist"})
+
+	err := cmd.Execute()
+	if err != nil {
+		t.Fatalf("unexpected error for nonexistent path: %v", err)
+	}
+
+	var out exportOutput
+	if err := json.Unmarshal(buf.Bytes(), &out); err != nil {
+		t.Fatalf("invalid JSON: %v\nraw: %s", err, buf.String())
+	}
+
+	// Output should be valid JSON with agents array (may have agents from home dir)
+	if out.Agents == nil {
+		t.Error("expected agents array in output")
 	}
 }

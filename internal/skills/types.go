@@ -43,15 +43,38 @@ func ContextWindow(name string) int64 {
 	return defaultContextWindow
 }
 
+// SkillFile represents a single skill file or directory.
+type SkillFile struct {
+	Path string `json:"path" yaml:"path"`
+	Type string `json:"type" yaml:"type"` // "file" or "dir"
+}
+
+// HookConfig represents a hook configuration.
+type HookConfig struct {
+	Event string `json:"event" yaml:"event"`
+	Path  string `json:"path,omitempty" yaml:"path,omitempty"`
+}
+
+// MCPServer represents an MCP server configuration.
+type MCPServer struct {
+	Name   string `json:"name" yaml:"name"`
+	Path   string `json:"path,omitempty" yaml:"path,omitempty"`
+	Config string `json:"config,omitempty" yaml:"config,omitempty"`
+}
+
 // AgentResult holds the scan result for a single agent.
 type AgentResult struct {
-	Name     string   `json:"name"`
-	Skills   int      `json:"skills"`
-	Hooks    int      `json:"hooks"`
-	MCP      int      `json:"mcp"`
-	Tokens   int64    `json:"tokens"`
-	Sources  []string `json:"sources"`
-	Advisory bool     `json:"advisory"`
+	Name        string       `json:"name"`
+	ConfigDir   string       `json:"config_dir"`
+	Skills      int          `json:"skills"`
+	SkillFiles  []SkillFile  `json:"skill_files,omitempty"`
+	Hooks       int          `json:"hooks"`
+	HookConfigs []HookConfig `json:"hook_configs,omitempty"`
+	MCP         int          `json:"mcp"`
+	MCPServers  []MCPServer  `json:"mcp_servers,omitempty"`
+	Tokens      int64        `json:"tokens"`
+	Sources     []string     `json:"sources"`
+	Advisory    bool         `json:"advisory"`
 }
 
 // ANCCProduct holds ANCC product SKILL.md info if present.

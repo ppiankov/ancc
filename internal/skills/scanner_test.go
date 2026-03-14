@@ -210,7 +210,7 @@ func TestParseClaudeSettings_WithHooks(t *testing.T) {
 	data, _ := json.Marshal(settings)
 	writeTestFile(t, path, string(data))
 
-	hooks, mcp, found := parseClaudeSettings(path)
+	hooks, mcp, found := parseClaudeSettingsLegacy(path)
 	if !found {
 		t.Fatal("expected found=true")
 	}
@@ -227,14 +227,14 @@ func TestParseClaudeSettings_Malformed(t *testing.T) {
 	path := filepath.Join(dir, "settings.json")
 	writeTestFile(t, path, "not json")
 
-	_, _, found := parseClaudeSettings(path)
+	_, _, found := parseClaudeSettingsLegacy(path)
 	if !found {
 		t.Error("expected found=true for existing but malformed file")
 	}
 }
 
 func TestParseClaudeSettings_Missing(t *testing.T) {
-	_, _, found := parseClaudeSettings("/nonexistent/settings.json")
+	_, _, found := parseClaudeSettingsLegacy("/nonexistent/settings.json")
 	if found {
 		t.Error("expected found=false for missing file")
 	}
@@ -254,13 +254,13 @@ func TestParseMCPServers_Valid(t *testing.T) {
 	data, _ := json.Marshal(cfg)
 	writeTestFile(t, path, string(data))
 
-	if got := parseMCPServers(path); got != 2 {
+	if got := parseMCPServersLegacy(path); got != 2 {
 		t.Errorf("got %d, want 2", got)
 	}
 }
 
 func TestParseMCPServers_Missing(t *testing.T) {
-	if got := parseMCPServers("/nonexistent"); got != 0 {
+	if got := parseMCPServersLegacy("/nonexistent"); got != 0 {
 		t.Errorf("got %d, want 0", got)
 	}
 }
@@ -306,8 +306,8 @@ func TestScanClaudeCode_GlobalAndProject(t *testing.T) {
 	writeTestFile(t, filepath.Join(proj, ".claude", "settings.local.json"), "{}")
 
 	r := scanClaudeCode(proj, home)
-	if r.Skills != 3 {
-		t.Errorf("skills = %d, want 3 (2 global + 1 project)", r.Skills)
+	if r.Skills != 4 {
+		t.Errorf("skills = %d, want 4 (2 global skill dirs + 1 project skill dir + 1 project settings.local.json)", r.Skills)
 	}
 	if r.Hooks != 1 {
 		t.Errorf("hooks = %d, want 1", r.Hooks)
@@ -315,8 +315,8 @@ func TestScanClaudeCode_GlobalAndProject(t *testing.T) {
 	if r.MCP != 1 {
 		t.Errorf("mcp = %d, want 1", r.MCP)
 	}
-	if len(r.Sources) != 4 {
-		t.Errorf("sources = %d, want 4", len(r.Sources))
+	if len(r.Sources) != 5 {
+		t.Errorf("sources = %d, want 5", len(r.Sources))
 	}
 }
 
@@ -421,7 +421,7 @@ enabled = true
 `
 	writeTestFile(t, path, content)
 
-	if got := parseCodexTOMLMCP(path); got != 2 {
+	if got := parseCodexTOMLMCPLegacy(path); got != 2 {
 		t.Errorf("got %d, want 2", got)
 	}
 }
@@ -431,13 +431,13 @@ func TestParseCodexTOMLMCP_NoServers(t *testing.T) {
 	path := filepath.Join(dir, "config.toml")
 	writeTestFile(t, path, `model = "gpt-5.3-codex"`)
 
-	if got := parseCodexTOMLMCP(path); got != 0 {
+	if got := parseCodexTOMLMCPLegacy(path); got != 0 {
 		t.Errorf("got %d, want 0", got)
 	}
 }
 
 func TestParseCodexTOMLMCP_Missing(t *testing.T) {
-	if got := parseCodexTOMLMCP("/nonexistent/config.toml"); got != 0 {
+	if got := parseCodexTOMLMCPLegacy("/nonexistent/config.toml"); got != 0 {
 		t.Errorf("got %d, want 0", got)
 	}
 }
@@ -453,7 +453,7 @@ command = "not-a-table"
 `
 	writeTestFile(t, path, content)
 
-	if got := parseCodexTOMLMCP(path); got != 1 {
+	if got := parseCodexTOMLMCPLegacy(path); got != 1 {
 		t.Errorf("got %d, want 1 (array table should be ignored)", got)
 	}
 }
@@ -472,7 +472,7 @@ func TestParseOpenCodeJSON_Valid(t *testing.T) {
 	data, _ := json.Marshal(cfg)
 	writeTestFile(t, path, string(data))
 
-	instructions, mcp, b, found := parseOpenCodeJSON(path)
+	instructions, mcp, b, found := parseOpenCodeJSONLegacy(path)
 	if !found {
 		t.Fatal("expected found=true")
 	}
@@ -488,7 +488,7 @@ func TestParseOpenCodeJSON_Valid(t *testing.T) {
 }
 
 func TestParseOpenCodeJSON_Missing(t *testing.T) {
-	_, _, _, found := parseOpenCodeJSON("/nonexistent")
+	_, _, _, found := parseOpenCodeJSONLegacy("/nonexistent")
 	if found {
 		t.Error("expected found=false")
 	}
@@ -499,7 +499,7 @@ func TestParseOpenCodeJSON_Malformed(t *testing.T) {
 	path := filepath.Join(dir, "opencode.json")
 	writeTestFile(t, path, "not json")
 
-	_, _, b, found := parseOpenCodeJSON(path)
+	_, _, b, found := parseOpenCodeJSONLegacy(path)
 	if !found {
 		t.Error("expected found=true for existing file")
 	}
@@ -1074,8 +1074,8 @@ func TestScanWindsurf_WithRulesFile(t *testing.T) {
 	if r.Skills != 1 {
 		t.Errorf("skills = %d, want 1", r.Skills)
 	}
-	if len(r.Sources) != 1 || r.Sources[0] != ".windsurfrules" {
-		t.Errorf("sources = %v, want [.windsurfrules]", r.Sources)
+	if len(r.Sources) != 1 || r.Sources[0] != "./.windsurfrules" {
+		t.Errorf("sources = %v, want [./.windsurfrules]", r.Sources)
 	}
 }
 
@@ -1302,8 +1302,8 @@ func TestScanCopilot_WithInstructions(t *testing.T) {
 	if r.Skills != 1 {
 		t.Errorf("skills = %d, want 1", r.Skills)
 	}
-	if len(r.Sources) != 1 || r.Sources[0] != ".github/copilot-instructions.md" {
-		t.Errorf("sources = %v, want [.github/copilot-instructions.md]", r.Sources)
+	if len(r.Sources) != 1 || r.Sources[0] != "./.github/copilot-instructions.md" {
+		t.Errorf("sources = %v, want [./.github/copilot-instructions.md]", r.Sources)
 	}
 }
 

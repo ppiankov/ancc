@@ -17,13 +17,17 @@ type exportOutput struct {
 
 // exportAgent holds one agent's configuration summary for export.
 type exportAgent struct {
-	Name     string   `json:"name" yaml:"name"`
-	Skills   int      `json:"skills" yaml:"skills"`
-	Hooks    int      `json:"hooks" yaml:"hooks"`
-	MCP      int      `json:"mcp" yaml:"mcp"`
-	Tokens   int64    `json:"tokens" yaml:"tokens"`
-	Sources  []string `json:"sources" yaml:"sources"`
-	Advisory bool     `json:"advisory" yaml:"advisory"`
+	Name        string              `json:"name" yaml:"name"`
+	ConfigDir   string              `json:"config_dir" yaml:"config_dir"`
+	Skills      int                 `json:"skills" yaml:"skills"`
+	SkillFiles  []skills.SkillFile  `json:"skill_files,omitempty" yaml:"skill_files,omitempty"`
+	Hooks       int                 `json:"hooks" yaml:"hooks"`
+	HookConfigs []skills.HookConfig `json:"hook_configs,omitempty" yaml:"hook_configs,omitempty"`
+	MCP         int                 `json:"mcp" yaml:"mcp"`
+	MCPServers  []skills.MCPServer  `json:"mcp_servers,omitempty" yaml:"mcp_servers,omitempty"`
+	Tokens      int64               `json:"tokens" yaml:"tokens"`
+	Sources     []string            `json:"sources" yaml:"sources"`
+	Advisory    bool                `json:"advisory" yaml:"advisory"`
 }
 
 func newExportCmd() *cobra.Command {
@@ -31,9 +35,33 @@ func newExportCmd() *cobra.Command {
 	var agent string
 
 	cmd := &cobra.Command{
-		Use:   "export [path]",
+		Use:   "export [--format json|yaml] [--agent claude|codex|...] [path]",
 		Short: "Export agent configuration summary as JSON or YAML",
-		Args:  cobra.MaximumNArgs(1),
+		Long: `Export agent configuration summary as JSON or YAML.
+
+By default, exports all detected agents in JSON format.
+Use --format yaml for YAML output.
+Use --agent <name> to export only a specific agent's configuration.
+
+Output structure:
+  {
+    "agents": [
+      {
+        "name": "claude-code",
+        "config_dir": "~/.claude",
+        "skills": [...],
+        "skill_files": [...],
+        "hooks": [...],
+        "hook_configs": [...],
+        "mcp": [...],
+        "mcp_servers": [...],
+        "tokens": ...,
+        "sources": [...],
+        "advisory": false
+      }
+    ]
+  }`,
+		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			path := "."
 			if len(args) > 0 {
@@ -76,13 +104,17 @@ func buildExportOutput(result *skills.ScanResult, agentFilter string) *exportOut
 			continue
 		}
 		out.Agents = append(out.Agents, exportAgent{
-			Name:     a.Name,
-			Skills:   a.Skills,
-			Hooks:    a.Hooks,
-			MCP:      a.MCP,
-			Tokens:   a.Tokens,
-			Sources:  a.Sources,
-			Advisory: a.Advisory,
+			Name:        a.Name,
+			ConfigDir:   a.ConfigDir,
+			Skills:      a.Skills,
+			SkillFiles:  a.SkillFiles,
+			Hooks:       a.Hooks,
+			HookConfigs: a.HookConfigs,
+			MCP:         a.MCP,
+			MCPServers:  a.MCPServers,
+			Tokens:      a.Tokens,
+			Sources:     a.Sources,
+			Advisory:    a.Advisory,
 		})
 	}
 	return out
