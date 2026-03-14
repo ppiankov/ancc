@@ -38,15 +38,15 @@ func (mfs *mockFileSystem) setup(t *testing.T) string {
 func TestScanAgentPaths(t *testing.T) {
 	mfs := &mockFileSystem{
 		files: map[string]string{
-			"home/.claude/settings.json":    `{"hooks": {"onSubmit": [{"hooks": [{}]}]}, "mcpServers": {"server1": {}}}`, // 1 hook, 1 mcp
-			"home/.claude/CLAUDE.md":        "claude home",
-			"home/.cline/skills/skill1/a":   "a",
-			"home/.cline/skills/skill2/b":   "b",
-			"project/.clinerules/rule1":     "rule1 content",
-			"project/CLAUDE.md":             "claude project",
-			"project/.claude/skills/ps/c":   "c",
-			"project/AGENTS.md":             "agents",
-			"home/.codex/config.toml":       `[mcp_servers.server1]`,
+			"home/.claude/settings.json":  `{"hooks": {"onSubmit": [{"hooks": [{}]}]}, "mcpServers": {"server1": {}}}`, // 1 hook, 1 mcp
+			"home/.claude/CLAUDE.md":      "claude home",
+			"home/.cline/skills/skill1/a": "a",
+			"home/.cline/skills/skill2/b": "b",
+			"project/.clinerules/rule1":   "rule1 content",
+			"project/CLAUDE.md":           "claude project",
+			"project/.claude/skills/ps/c": "c",
+			"project/AGENTS.md":           "agents",
+			"home/.codex/config.toml":     `[mcp_servers.server1]`,
 		},
 		dirs: []string{
 			"home/.claude/skills/homeskill",

@@ -53,6 +53,9 @@ func scanAgentPaths(projectDir, homeDir string, spec agentPathSpec) AgentResult 
 		fullPath := resolvePath(filepath.Join(baseDir, path))
 		found := false
 		var size int64
+		var skillDirs []string
+		var files []string
+		var mdcFiles []string
 
 		if parseFunc != nil {
 			found, size = parseFunc(fullPath, &r)
@@ -66,7 +69,7 @@ func scanAgentPaths(projectDir, homeDir string, spec agentPathSpec) AgentResult 
 					size = s
 				}
 			case pathTypeDirSkills:
-				skillDirs := listSkillDirs(fullPath)
+				skillDirs = listSkillDirs(fullPath)
 				if len(skillDirs) > 0 {
 					r.Skills += len(skillDirs)
 					for _, sd := range skillDirs {
@@ -83,7 +86,7 @@ func scanAgentPaths(projectDir, homeDir string, spec agentPathSpec) AgentResult 
 					size = dirBytes(fullPath)
 				}
 			case pathTypeDirFiles:
-				files := listFiles(fullPath)
+				files = listFiles(fullPath)
 				if len(files) > 0 {
 					r.Skills += len(files)
 					for _, f := range files {
@@ -101,7 +104,7 @@ func scanAgentPaths(projectDir, homeDir string, spec agentPathSpec) AgentResult 
 				}
 			case pathTypeCustom:
 				// Custom handling for cursor .mdc files
-				mdcFiles := listMdcFiles(fullPath)
+				mdcFiles = listMdcFiles(fullPath)
 				if len(mdcFiles) > 0 {
 					r.Skills += len(mdcFiles)
 					for _, f := range mdcFiles {
@@ -118,6 +121,10 @@ func scanAgentPaths(projectDir, homeDir string, spec agentPathSpec) AgentResult 
 
 		if found {
 			source := sourcePrefix + path
+			// Add trailing slash for directory types
+			if pt == pathTypeDirSkills || pt == pathTypeDirFiles || pt == pathTypeCustom {
+				source += "/"
+			}
 			if comment != "" {
 				source += " " + comment
 			}
