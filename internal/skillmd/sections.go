@@ -21,6 +21,8 @@ type SkillFile struct {
 	Description string
 	Sections    map[string]*Section
 	Commands    []Command
+	LineCount   int
+	Path        string
 }
 
 // Section represents a markdown section (H2).

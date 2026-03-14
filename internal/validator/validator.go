@@ -45,6 +45,11 @@ func Validate(path string) (*ValidationResult, error) {
 			pass(CheckExitCodesNumeric, "SKILL.md not found"),
 			pass(CheckCommandsNotPlaceholder, "SKILL.md not found"),
 			pass(CheckInstallHasCommand, "SKILL.md not found"),
+			pass(CheckTriggersActionable, "SKILL.md not found"),
+			pass(CheckToolsReferenceReal, "SKILL.md not found"),
+			pass(CheckInstructionsSpecific, "SKILL.md not found"),
+			pass(CheckSkillFileNotTooLarge, "SKILL.md not found"),
+			pass(CheckSkillNameNotDuplicate, "SKILL.md not found"),
 		)
 		computeSummary(result)
 		return result, nil
@@ -73,6 +78,12 @@ func Validate(path string) (*ValidationResult, error) {
 		checkExitCodesNumeric(sf),
 		checkCommandsNotPlaceholder(sf),
 		checkInstallHasCommand(sf),
+		// Agent SKILL.md semantic quality checks.
+		checkTriggersActionable(sf),
+		checkToolsReferenceReal(sf),
+		checkInstructionsSpecific(sf),
+		checkSkillFileNotTooLarge(sf),
+		checkSkillNameNotDuplicate(sf, nil),
 	)
 
 	computeSummary(result)
@@ -109,6 +120,11 @@ func validateGitHubWithClient(client *gitHubClient, owner, repo string) (*Valida
 			pass(CheckExitCodesNumeric, "SKILL.md not found"),
 			pass(CheckCommandsNotPlaceholder, "SKILL.md not found"),
 			pass(CheckInstallHasCommand, "SKILL.md not found"),
+			pass(CheckTriggersActionable, "SKILL.md not found"),
+			pass(CheckToolsReferenceReal, "SKILL.md not found"),
+			pass(CheckInstructionsSpecific, "SKILL.md not found"),
+			pass(CheckSkillFileNotTooLarge, "SKILL.md not found"),
+			pass(CheckSkillNameNotDuplicate, "SKILL.md not found"),
 		)
 		// Still check binary releases.
 		result.Checks = append(result.Checks, checkBinaryReleaseGitHub(client, owner, repo))
@@ -140,6 +156,12 @@ func validateGitHubWithClient(client *gitHubClient, owner, repo string) (*Valida
 		checkExitCodesNumeric(sf),
 		checkCommandsNotPlaceholder(sf),
 		checkInstallHasCommand(sf),
+		// Agent SKILL.md semantic quality checks.
+		checkTriggersActionable(sf),
+		checkToolsReferenceReal(sf),
+		checkInstructionsSpecific(sf),
+		checkSkillFileNotTooLarge(sf),
+		checkSkillNameNotDuplicate(sf, nil),
 	)
 
 	computeSummary(result)

@@ -27,6 +27,12 @@ const (
 	CheckExitCodesNumeric       = "exit-codes-numeric"
 	CheckCommandsNotPlaceholder = "commands-not-placeholder"
 	CheckInstallHasCommand      = "install-has-command"
+	// Semantic quality checks for agent SKILL.md files.
+	CheckTriggersActionable     = "triggers-actionable"
+	CheckToolsReferenceReal     = "tools-reference-real"
+	CheckInstructionsSpecific   = "instructions-specific"
+	CheckSkillFileNotTooLarge   = "skill-file-not-too-large"
+	CheckSkillNameNotDuplicate  = "skill-name-not-duplicate"
 )
 
 func pass(name, msg string) CheckResult {
@@ -256,4 +262,156 @@ func checkInstallHasCommand(sf *skillmd.SkillFile) CheckResult {
 		}
 	}
 	return warn(CheckInstallHasCommand, "Install section has no recognizable install command")
+}
+
+// --- Semantic quality checks for agent SKILL.md files ---
+
+// vagueTriggerPatterns are phrases that indicate non-actionable triggers.
+var vagueTriggerPatterns = []string{
+	"when needed",
+	"when appropriate",
+	"as needed",
+	"if necessary",
+	"when relevant",
+	"when suitable",
+	"at discretion",
+	"when required",
+	"when useful",
+}
+
+// checkTriggersActionable verifies trigger sections contain actionable conditions.
+// Warns if triggers use vague language like "when needed" or "as appropriate".
+func checkTriggersActionable(sf *skillmd.SkillFile) CheckResult {
+	// Look for trigger-related sections.
+	triggerSections := []string{"When to Use", "Triggers", "When to Use This Skill", "Usage Triggers"}
+	var content string
+	for _, name := range triggerSections {
+		if section, ok := sf.Sections[name]; ok {
+			content = section.Content
+			break
+		}
+	}
+	if content == "" {
+		return pass(CheckTriggersActionable, "no trigger section found (may not apply)")
+	}
+
+	lower := strings.ToLower(content)
+	for _, pattern := range vagueTriggerPatterns {
+		if strings.Contains(lower, pattern) {
+			return warn(CheckTriggersActionable,
+				fmt.Sprintf("trigger section contains vague condition %q", pattern))
+		}
+	}
+	return pass(CheckTriggersActionable, "trigger conditions appear actionable")
+}
+
+// knownMCPPrefixes are recognized MCP tool prefixes.
+var knownMCPPrefixes = []string{
+	"pastewatch", "contextspectre", "tokencontrol", "workledger",
+	"notion", "github", "slack", "linear", "jira", "confluence",
+	"postgres", "mysql", "redis", "mongodb", "sqlite",
+	"filesystem", "puppeteer", "playwright", "selenium",
+	"docker", "kubernetes", "kubectl", "helm",
+	"aws", "gcp", "azure", "cloudflare",
+	"stripe", "sendgrid", "twilio", "slack",
+	"git", "npm", "pip", "cargo", "go",
+}
+
+// suspiciousToolPatterns indicate potentially fake tool names.
+var suspiciousToolPatterns = []string{
+	"my-mcp", "example-mcp", "placeholder", "your-mcp",
+	"<mcp", "${mcp", "{{mcp", "todo", "FIXME", "XXX",
+}
+
+// checkToolsReferenceReal verifies tool lists reference real MCP tools or CLI commands.
+// Warns on suspicious names that look like placeholders.
+func checkToolsReferenceReal(sf *skillmd.SkillFile) CheckResult {
+	// Look for tools-related sections.
+	toolSections := []string{"Tools", "MCP Tools", "MCP Servers", "Commands", "Integrations"}
+	var content string
+	for _, name := range toolSections {
+		if section, ok := sf.Sections[name]; ok {
+			content = section.Content
+			break
+		}
+	}
+	if content == "" {
+		return pass(CheckToolsReferenceReal, "no tools section found (may not apply)")
+	}
+
+	lower := strings.ToLower(content)
+	for _, pattern := range suspiciousToolPatterns {
+		if strings.Contains(lower, strings.ToLower(pattern)) {
+			return warn(CheckToolsReferenceReal,
+				fmt.Sprintf("tools section contains suspicious name %q", pattern))
+		}
+	}
+	return pass(CheckToolsReferenceReal, "tool names appear valid")
+}
+
+// vagueInstructionPatterns are phrases that indicate non-specific instructions.
+var vagueInstructionPatterns = []string{
+	"handle appropriately",
+	"deal with it",
+	"manage accordingly",
+	"as appropriate",
+	"use your judgment",
+	"decide based on context",
+	"handle as needed",
+	"take care of",
+	"sort it out",
+	"figure it out",
+	"do what's best",
+	"apply best practices",
+	"follow conventions",
+}
+
+// checkInstructionsSpecific verifies instructions are specific enough.
+// Warns on overly vague instructions like "handle appropriately".
+func checkInstructionsSpecific(sf *skillmd.SkillFile) CheckResult {
+	// Look for instruction-related sections.
+	instructionSections := []string{"Instructions", "How to Use", "Usage", "Procedure", "Steps"}
+	var content string
+	for _, name := range instructionSections {
+		if section, ok := sf.Sections[name]; ok {
+			content = section.Content
+			break
+		}
+	}
+	if content == "" {
+		return pass(CheckInstructionsSpecific, "no instructions section found (may not apply)")
+	}
+
+	lower := strings.ToLower(content)
+	for _, pattern := range vagueInstructionPatterns {
+		if strings.Contains(lower, pattern) {
+			return warn(CheckInstructionsSpecific,
+				fmt.Sprintf("instructions contain vague phrase %q", pattern))
+		}
+	}
+	return pass(CheckInstructionsSpecific, "instructions appear specific")
+}
+
+// checkSkillFileNotTooLarge warns if a skill file exceeds 500 lines.
+// Large skill files are likely too complex and should be split.
+func checkSkillFileNotTooLarge(sf *skillmd.SkillFile) CheckResult {
+	if sf.LineCount > 500 {
+		return warn(CheckSkillFileNotTooLarge,
+			fmt.Sprintf("skill file has %d lines (consider splitting if >500)", sf.LineCount))
+	}
+	return pass(CheckSkillFileNotTooLarge, fmt.Sprintf("skill file size (%d lines) is reasonable", sf.LineCount))
+}
+
+// checkSkillNameNotDuplicate checks for duplicate skill names.
+// This check requires external context (other skill files) and is a placeholder
+// for batch validation scenarios. For single-file validation, it always passes.
+func checkSkillNameNotDuplicate(sf *skillmd.SkillFile, allSkillNames map[string]string) CheckResult {
+	if allSkillNames == nil {
+		return pass(CheckSkillNameNotDuplicate, "duplicate check skipped (no context)")
+	}
+	if existingPath, ok := allSkillNames[sf.Name]; ok {
+		return warn(CheckSkillNameNotDuplicate,
+			fmt.Sprintf("skill name %q duplicates %s", sf.Name, existingPath))
+	}
+	return pass(CheckSkillNameNotDuplicate, fmt.Sprintf("skill name %q is unique", sf.Name))
 }
