@@ -1,12 +1,14 @@
 package cli
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -33,19 +35,28 @@ const (
 
 // doctorEnv holds injectable dependencies for testing.
 type doctorEnv struct {
-	version   string
-	lookPath  func(string) (string, error)
-	httpGet   func(string) (*http.Response, error)
-	getenv    func(string) string
-	cmdOutput func(string, ...string) ([]byte, error)
+	ctx          context.Context
+	version      string
+	githubAPIURL string
+	lookPath     func(string) (string, error)
+	httpDo       func(*http.Request) (*http.Response, error)
+	getenv       func(string) string
+	cmdOutput    func(string, ...string) ([]byte, error)
 }
 
-func defaultDoctorEnv(version string) *doctorEnv {
+func defaultDoctorEnv(ctx context.Context, version string) *doctorEnv {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	client := &http.Client{}
 	return &doctorEnv{
-		version:  version,
-		lookPath: exec.LookPath,
-		httpGet:  http.Get,
-		getenv:   os.Getenv,
+		ctx:          ctx,
+		version:      version,
+		githubAPIURL: "https://api.github.com",
+		lookPath:     exec.LookPath,
+		httpDo:       client.Do,
+		getenv:       os.Getenv,
 		cmdOutput: func(name string, args ...string) ([]byte, error) {
 			return exec.Command(name, args...).Output()
 		},
@@ -59,7 +70,7 @@ func newDoctorCmd() *cobra.Command {
 		Use:   "doctor",
 		Short: "Check ancc health and environment",
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			env := defaultDoctorEnv(cmd.Root().Version)
+			env := defaultDoctorEnv(cmd.Context(), cmd.Root().Version)
 			result := runDoctor(env)
 
 			w := cmd.OutOrStdout()
@@ -116,6 +127,44 @@ func checkVersion(env *doctorEnv) DoctorCheck {
 	return DoctorCheck{Name: "ancc-version", Status: doctorOK, Message: v}
 }
 
+func compareVersions(a, b string) int {
+	aParts, aOK := parseVersion(a)
+	bParts, bOK := parseVersion(b)
+	if !aOK || !bOK {
+		return strings.Compare(strings.TrimSpace(a), strings.TrimSpace(b))
+	}
+
+	for i := range aParts {
+		switch {
+		case aParts[i] < bParts[i]:
+			return -1
+		case aParts[i] > bParts[i]:
+			return 1
+		}
+	}
+
+	return 0
+}
+
+func parseVersion(v string) ([3]int, bool) {
+	v = strings.TrimSpace(strings.TrimPrefix(v, "v"))
+	parts := strings.Split(v, ".")
+	if len(parts) != 3 {
+		return [3]int{}, false
+	}
+
+	var parsed [3]int
+	for i, part := range parts {
+		n, err := strconv.Atoi(part)
+		if err != nil {
+			return [3]int{}, false
+		}
+		parsed[i] = n
+	}
+
+	return parsed, true
+}
+
 func checkGo(env *doctorEnv) DoctorCheck {
 	_, err := env.lookPath("go")
 	if err != nil {
@@ -137,7 +186,12 @@ func checkGitHubAPI(env *doctorEnv) DoctorCheck {
 		return DoctorCheck{Name: "github-api", Status: doctorWarn, Message: "GITHUB_TOKEN not set"}
 	}
 
-	resp, err := env.httpGet("https://api.github.com")
+	req, err := http.NewRequestWithContext(doctorContext(env), http.MethodGet, env.githubAPIURL, nil)
+	if err != nil {
+		return DoctorCheck{Name: "github-api", Status: doctorError, Message: "GitHub API request failed"}
+	}
+
+	resp, err := env.httpDo(req)
 	if err != nil {
 		return DoctorCheck{Name: "github-api", Status: doctorError, Message: "GitHub API unreachable"}
 	}
@@ -156,6 +210,13 @@ func checkHomebrew(env *doctorEnv) DoctorCheck {
 		return DoctorCheck{Name: "homebrew", Status: doctorWarn, Message: "brew not found in PATH"}
 	}
 	return DoctorCheck{Name: "homebrew", Status: doctorOK, Message: "brew found"}
+}
+
+func doctorContext(env *doctorEnv) context.Context {
+	if env != nil && env.ctx != nil {
+		return env.ctx
+	}
+	return context.Background()
 }
 
 const doctorLabelWidth = 35

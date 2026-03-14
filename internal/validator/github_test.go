@@ -7,6 +7,14 @@ import (
 	"testing"
 )
 
+const testGitHubBaseURL = "https://github.example.test"
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (fn roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
+	return fn(req)
+}
+
 func TestParseGitHubURL(t *testing.T) {
 	tests := []struct {
 		input string
@@ -46,23 +54,26 @@ func TestParseGitHubURL(t *testing.T) {
 	}
 }
 
-func newTestServer(handler http.HandlerFunc) (*httptest.Server, *gitHubClient) {
-	srv := httptest.NewServer(handler)
-	client := &gitHubClient{
-		baseURL:    srv.URL,
-		httpClient: srv.Client(),
+func newTestClient(handler http.Handler) *gitHubClient {
+	return &gitHubClient{
+		baseURL: testGitHubBaseURL,
+		httpClient: &http.Client{
+			Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+				recorder := httptest.NewRecorder()
+				handler.ServeHTTP(recorder, req)
+				return recorder.Result(), nil
+			}),
+		},
 	}
-	return srv, client
 }
 
 func TestFetchSkillMD_Success(t *testing.T) {
 	skillContent := "# mytool\n\nA tool.\n"
 
-	var srvURL string
 	mux := http.NewServeMux()
 	mux.HandleFunc("/repos/owner/repo/contents/SKILL.md", func(w http.ResponseWriter, r *http.Request) {
 		resp := map[string]string{
-			"download_url": srvURL + "/raw/SKILL.md",
+			"download_url": testGitHubBaseURL + "/raw/SKILL.md",
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(resp)
@@ -71,14 +82,7 @@ func TestFetchSkillMD_Success(t *testing.T) {
 		_, _ = w.Write([]byte(skillContent))
 	})
 
-	srv := httptest.NewServer(mux)
-	defer srv.Close()
-	srvURL = srv.URL
-
-	client := &gitHubClient{
-		baseURL:    srv.URL,
-		httpClient: srv.Client(),
-	}
+	client := newTestClient(mux)
 
 	content, err := client.FetchSkillMD("owner", "repo")
 	if err != nil {
@@ -92,7 +96,6 @@ func TestFetchSkillMD_Success(t *testing.T) {
 func TestFetchSkillMD_DocsSubdir(t *testing.T) {
 	skillContent := "# mytool\n\nA tool in docs/.\n"
 
-	var srvURL string
 	mux := http.NewServeMux()
 	// Root SKILL.md returns 404.
 	mux.HandleFunc("/repos/owner/repo/contents/SKILL.md", func(w http.ResponseWriter, _ *http.Request) {
@@ -100,7 +103,7 @@ func TestFetchSkillMD_DocsSubdir(t *testing.T) {
 	})
 	// docs/SKILL.md exists.
 	mux.HandleFunc("/repos/owner/repo/contents/docs/SKILL.md", func(w http.ResponseWriter, _ *http.Request) {
-		resp := map[string]string{"download_url": srvURL + "/raw/docs/SKILL.md"}
+		resp := map[string]string{"download_url": testGitHubBaseURL + "/raw/docs/SKILL.md"}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(resp)
 	})
@@ -108,11 +111,7 @@ func TestFetchSkillMD_DocsSubdir(t *testing.T) {
 		_, _ = w.Write([]byte(skillContent))
 	})
 
-	srv := httptest.NewServer(mux)
-	defer srv.Close()
-	srvURL = srv.URL
-
-	client := &gitHubClient{baseURL: srv.URL, httpClient: srv.Client()}
+	client := newTestClient(mux)
 
 	content, err := client.FetchSkillMD("owner", "repo")
 	if err != nil {
@@ -124,10 +123,9 @@ func TestFetchSkillMD_DocsSubdir(t *testing.T) {
 }
 
 func TestFetchSkillMD_NotFound(t *testing.T) {
-	srv, client := newTestServer(func(w http.ResponseWriter, r *http.Request) {
+	client := newTestClient(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
-	})
-	defer srv.Close()
+	}))
 
 	_, err := client.FetchSkillMD("owner", "repo")
 	if err == nil {
@@ -137,11 +135,10 @@ func TestFetchSkillMD_NotFound(t *testing.T) {
 
 func TestFetchSkillMD_WithToken(t *testing.T) {
 	var gotAuth string
-	srv, client := newTestServer(func(w http.ResponseWriter, r *http.Request) {
+	client := newTestClient(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotAuth = r.Header.Get("Authorization")
 		w.WriteHeader(http.StatusNotFound)
-	})
-	defer srv.Close()
+	}))
 
 	client.token = "test-token-123"
 	_, _ = client.FetchSkillMD("owner", "repo")
@@ -152,7 +149,7 @@ func TestFetchSkillMD_WithToken(t *testing.T) {
 }
 
 func TestHasBinaryRelease_WithAssets(t *testing.T) {
-	srv, client := newTestServer(func(w http.ResponseWriter, r *http.Request) {
+	client := newTestClient(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		releases := []release{
 			{
 				TagName: "v1.0.0",
@@ -164,8 +161,7 @@ func TestHasBinaryRelease_WithAssets(t *testing.T) {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(releases)
-	})
-	defer srv.Close()
+	}))
 
 	has, err := client.HasBinaryRelease("owner", "repo")
 	if err != nil {
@@ -177,11 +173,10 @@ func TestHasBinaryRelease_WithAssets(t *testing.T) {
 }
 
 func TestHasBinaryRelease_NoAssets(t *testing.T) {
-	srv, client := newTestServer(func(w http.ResponseWriter, r *http.Request) {
+	client := newTestClient(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte("[]"))
-	})
-	defer srv.Close()
+	}))
 
 	has, err := client.HasBinaryRelease("owner", "repo")
 	if err != nil {
@@ -193,10 +188,9 @@ func TestHasBinaryRelease_NoAssets(t *testing.T) {
 }
 
 func TestHasBinaryRelease_APIError(t *testing.T) {
-	srv, client := newTestServer(func(w http.ResponseWriter, r *http.Request) {
+	client := newTestClient(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
-	})
-	defer srv.Close()
+	}))
 
 	_, err := client.HasBinaryRelease("owner", "repo")
 	if err == nil {
@@ -273,10 +267,9 @@ demotool run --format json | jq '.'
 ` + "```" + `
 `
 
-	var srvURL string
 	mux := http.NewServeMux()
 	mux.HandleFunc("/repos/owner/repo/contents/SKILL.md", func(w http.ResponseWriter, r *http.Request) {
-		resp := map[string]string{"download_url": srvURL + "/raw/SKILL.md"}
+		resp := map[string]string{"download_url": testGitHubBaseURL + "/raw/SKILL.md"}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(resp)
 	})
@@ -289,11 +282,7 @@ demotool run --format json | jq '.'
 		_ = json.NewEncoder(w).Encode(releases)
 	})
 
-	srv := httptest.NewServer(mux)
-	defer srv.Close()
-	srvURL = srv.URL
-
-	client := &gitHubClient{baseURL: srv.URL, httpClient: srv.Client()}
+	client := newTestClient(mux)
 
 	result, err := validateGitHubWithClient(client, "owner", "repo")
 	if err != nil {
@@ -312,15 +301,14 @@ demotool run --format json | jq '.'
 }
 
 func TestValidateGitHubWithClient_NoSkillMD(t *testing.T) {
-	srv, client := newTestServer(func(w http.ResponseWriter, r *http.Request) {
+	client := newTestClient(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/repos/owner/repo/releases" {
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write([]byte("[]"))
 			return
 		}
 		w.WriteHeader(http.StatusNotFound)
-	})
-	defer srv.Close()
+	}))
 
 	result, err := validateGitHubWithClient(client, "owner", "repo")
 	if err != nil {

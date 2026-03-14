@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -13,11 +14,13 @@ import (
 
 func fakeEnv(version string) *doctorEnv {
 	return &doctorEnv{
-		version: version,
+		ctx:          context.Background(),
+		version:      version,
+		githubAPIURL: "https://api.github.com",
 		lookPath: func(name string) (string, error) {
 			return "/usr/bin/" + name, nil
 		},
-		httpGet: func(url string) (*http.Response, error) {
+		httpDo: func(req *http.Request) (*http.Response, error) {
 			return &http.Response{
 				StatusCode: http.StatusOK,
 				Body:       io.NopCloser(strings.NewReader("")),
@@ -107,13 +110,36 @@ func TestRunDoctor_NoGitHubToken(t *testing.T) {
 
 func TestRunDoctor_GitHubAPIUnreachable(t *testing.T) {
 	env := fakeEnv("1.0.0")
-	env.httpGet = func(string) (*http.Response, error) {
+	env.httpDo = func(*http.Request) (*http.Response, error) {
 		return nil, fmt.Errorf("connection refused")
 	}
 
 	result := runDoctor(env)
 	if result.Status != doctorError {
 		t.Errorf("status = %q, want %q", result.Status, doctorError)
+	}
+}
+
+func TestCheckGitHubAPI_ContextCancelled(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	env := fakeEnv("1.0.0")
+	env.ctx = ctx
+	env.githubAPIURL = "https://api.github.com"
+	env.httpDo = func(req *http.Request) (*http.Response, error) {
+		if err := req.Context().Err(); !errors.Is(err, context.Canceled) {
+			t.Fatalf("request context error = %v, want %v", err, context.Canceled)
+		}
+		return nil, req.Context().Err()
+	}
+
+	check := checkGitHubAPI(env)
+	if check.Status != doctorError {
+		t.Fatalf("status = %q, want %q", check.Status, doctorError)
+	}
+	if check.Message != "GitHub API unreachable" {
+		t.Fatalf("message = %q, want %q", check.Message, "GitHub API unreachable")
 	}
 }
 
@@ -162,6 +188,27 @@ func TestCheckVersion_Dev(t *testing.T) {
 	}
 }
 
+func TestCompareVersions(t *testing.T) {
+	tests := []struct {
+		name string
+		a    string
+		b    string
+		want int
+	}{
+		{name: "multi digit minor", a: "0.9.0", b: "0.10.0", want: -1},
+		{name: "higher major", a: "1.0.0", b: "0.99.0", want: 1},
+		{name: "equal", a: "1.2.3", b: "1.2.3", want: 0},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := compareVersions(tt.a, tt.b); got != tt.want {
+				t.Fatalf("compareVersions(%q, %q) = %d, want %d", tt.a, tt.b, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestDoctorCmd_TextOutput(t *testing.T) {
 	cmd := newRootCmd("dev")
 	buf := new(bytes.Buffer)
@@ -201,7 +248,7 @@ func TestDoctorCmd_ExitCode1OnError(t *testing.T) {
 	// If GitHub API check errors (unlikely in normal env), exit 1.
 	// We just verify the ExitError pattern works.
 	env := fakeEnv("1.0.0")
-	env.httpGet = func(string) (*http.Response, error) {
+	env.httpDo = func(*http.Request) (*http.Response, error) {
 		return nil, fmt.Errorf("fail")
 	}
 
