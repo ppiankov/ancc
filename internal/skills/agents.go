@@ -7,9 +7,38 @@ import (
 	"strings"
 )
 
+// resolveSymlink resolves a path if it's a symlink, returning the target path.
+// If the path doesn't exist or is not a symlink, it returns the original path.
+// This ensures symlinked agent config directories are properly detected.
+func resolveSymlink(path string) string {
+	resolved, err := filepath.EvalSymlinks(path)
+	if err != nil {
+		return path
+	}
+	return resolved
+}
+
+// statPath resolves symlinks and returns file info for the path.
+// Returns nil if the path doesn't exist (including broken symlinks).
+func statPath(path string) os.FileInfo {
+	resolved := resolveSymlink(path)
+	info, err := os.Stat(resolved)
+	if err != nil {
+		return nil
+	}
+	return info
+}
+
+// dirExists checks if a directory exists, following symlinks.
+func dirExists(path string) bool {
+	info := statPath(path)
+	return info != nil && info.IsDir()
+}
+
 // fileBytes returns the size of a single file in bytes, or 0 on error.
 func fileBytes(path string) int64 {
-	info, err := os.Stat(path)
+	resolved := resolveSymlink(path)
+	info, err := os.Stat(resolved)
 	if err != nil {
 		return 0
 	}
@@ -19,13 +48,14 @@ func fileBytes(path string) int64 {
 // dirBytes returns the total size of all regular files in a directory (non-recursive).
 // Uses os.Stat to follow symlinks and get the target file size.
 func dirBytes(dir string) int64 {
-	entries, err := os.ReadDir(dir)
+	resolved := resolveSymlink(dir)
+	entries, err := os.ReadDir(resolved)
 	if err != nil {
 		return 0
 	}
 	var total int64
 	for _, e := range entries {
-		info, err := os.Stat(filepath.Join(dir, e.Name()))
+		info, err := os.Stat(filepath.Join(resolved, e.Name()))
 		if err != nil || info.IsDir() {
 			continue
 		}
@@ -44,13 +74,14 @@ func dirBytesRecursiveDepth(dir string, maxDepth int) int64 {
 	if maxDepth <= 0 {
 		return 0
 	}
-	entries, err := os.ReadDir(dir)
+	resolved := resolveSymlink(dir)
+	entries, err := os.ReadDir(resolved)
 	if err != nil {
 		return 0
 	}
 	var total int64
 	for _, e := range entries {
-		path := filepath.Join(dir, e.Name())
+		path := filepath.Join(resolved, e.Name())
 		info, err := os.Stat(path)
 		if err != nil {
 			continue
@@ -72,7 +103,8 @@ func bytesToTokens(b int64) int64 {
 // countSkillDirs counts subdirectories in a skills directory.
 // Follows symlinks so that symlinked skill directories are counted.
 func countSkillDirs(dir string) int {
-	entries, err := os.ReadDir(dir)
+	resolved := resolveSymlink(dir)
+	entries, err := os.ReadDir(resolved)
 	if err != nil {
 		return 0
 	}
@@ -83,7 +115,7 @@ func countSkillDirs(dir string) int {
 			continue
 		}
 		if e.Type()&os.ModeSymlink != 0 {
-			info, err := os.Stat(filepath.Join(dir, e.Name()))
+			info, err := os.Stat(filepath.Join(resolved, e.Name()))
 			if err == nil && info.IsDir() {
 				count++
 			}
@@ -94,7 +126,8 @@ func countSkillDirs(dir string) int {
 
 // countFiles counts regular files in a directory.
 func countFiles(dir string) int {
-	entries, err := os.ReadDir(dir)
+	resolved := resolveSymlink(dir)
+	entries, err := os.ReadDir(resolved)
 	if err != nil {
 		return 0
 	}
@@ -109,7 +142,8 @@ func countFiles(dir string) int {
 
 // parseClaudeSettings reads a Claude settings.json and counts hooks and MCP servers.
 func parseClaudeSettings(path string) (hooks, mcp int, found bool) {
-	data, err := os.ReadFile(path)
+	resolved := resolveSymlink(path)
+	data, err := os.ReadFile(resolved)
 	if err != nil {
 		return 0, 0, false
 	}
@@ -140,7 +174,8 @@ func parseClaudeSettings(path string) (hooks, mcp int, found bool) {
 
 // parseCodexTOMLMCP counts [mcp_servers.*] table sections in a Codex config.toml.
 func parseCodexTOMLMCP(path string) int {
-	data, err := os.ReadFile(path)
+	resolved := resolveSymlink(path)
+	data, err := os.ReadFile(resolved)
 	if err != nil {
 		return 0
 	}
@@ -156,7 +191,8 @@ func parseCodexTOMLMCP(path string) int {
 
 // parseOpenCodeJSON reads an opencode.json and returns instruction count, MCP count, byte size, and whether the file exists.
 func parseOpenCodeJSON(path string) (instructions, mcp int, bytes int64, found bool) {
-	data, err := os.ReadFile(path)
+	resolved := resolveSymlink(path)
+	data, err := os.ReadFile(resolved)
 	if err != nil {
 		return 0, 0, 0, false
 	}
@@ -173,7 +209,8 @@ func parseOpenCodeJSON(path string) (instructions, mcp int, bytes int64, found b
 
 // parseMCPServers reads a JSON file and counts entries under "mcpServers".
 func parseMCPServers(path string) int {
-	data, err := os.ReadFile(path)
+	resolved := resolveSymlink(path)
+	data, err := os.ReadFile(resolved)
 	if err != nil {
 		return 0
 	}
@@ -262,7 +299,8 @@ func scanCursor(projectDir, homeDir string) AgentResult {
 	var bytes int64
 
 	rulesDir := filepath.Join(projectDir, ".cursor", "rules")
-	entries, err := os.ReadDir(rulesDir)
+	resolvedRulesDir := resolveSymlink(rulesDir)
+	entries, err := os.ReadDir(resolvedRulesDir)
 	if err == nil {
 		for _, e := range entries {
 			if !e.IsDir() && filepath.Ext(e.Name()) == ".mdc" {
