@@ -186,3 +186,109 @@ func TestScanAgentPaths(t *testing.T) {
 		})
 	}
 }
+
+func TestAllAgents(t *testing.T) {
+	mfs := &mockFileSystem{
+		files: map[string]string{
+			"home/.claude/settings.json":  `{"hooks": {"onSubmit": [{"hooks": [{}]}]}, "mcpServers": {"server1": {}}}`,
+			"home/.claude/CLAUDE.md":      "claude home",
+			"home/.cline/skills/skill1/a": "a",
+			"home/.cline/skills/skill2/b": "b",
+			"project/.clinerules/rule1":   "rule1 content",
+			"project/CLAUDE.md":           "claude project",
+			"project/.claude/skills/ps/c": "c",
+			"project/AGENTS.md":           "agents",
+			"home/.codex/config.toml":     `[mcp_servers.server1]`,
+			// cursor
+			"home/.cursor/mcp.json":          `{"mcpServers": {"cursor1": {}}}`,
+			"project/.cursor/rules/rule.mdc": "cursor rule",
+			// opencode
+			"home/.config/opencode/opencode.json":   `{"mcp": {"opencode1": {}}, "instructions": [{}]}`,
+			"home/.config/opencode/commands/cmd.md": "cmd",
+			"project/opencode.json":                 `{"mcp": {"opencode1": {}}, "instructions": [{}]}`,
+			// qwen
+			"home/.qwen/settings.json": `{"mcpServers": {"qwen1": {}}}`,
+			// openclaw
+			"home/.openclaw/openclaw.json":        `{"mcpServers": {"openclaw1": {}}}`,
+			"home/.openclaw/config/mcporter.json": `{"mcpServers": {"mcporter1": {}}}`,
+			// windsurf
+			"home/.codeium/windsurf/mcp_config.json": `{"mcpServers": {"windsurf1": {}}}`,
+			"home/.windsurf/rules/rule.txt":          "rule",
+			"project/.windsurfrules":                 "windsurf rules",
+			"project/.windsurf/rules/rule2.txt":      "rule2",
+			// aider
+			"home/.aider.conf.yml":    "aider config",
+			"project/.aider.conf.yml": "aider config",
+			// continue
+			"home/.continue/config.yaml": "continue yaml",
+			"home/.continue/config.json": `{"continue": true}`,
+			"project/.continuerc.json":   `{"continue": true}`,
+			// copilot
+			"project/.github/copilot-instructions.md": "copilot instructions",
+			// kilocode
+			"home/.config/kilo/opencode.json":  `{"mcp": {"kilocode1": {}}, "instructions": [{}]}`,
+			"project/.kilocode/rules/rule.txt": "rule",
+		},
+		dirs: []string{
+			"home/.claude/skills/homeskill",
+			"home/.cline/skills/skill1",
+			"home/.cline/skills/skill2",
+			"project/.claude/skills/ps",
+			"project/.clinerules",
+			// cursor
+			"project/.cursor/rules",
+			// opencode
+			"home/.config/opencode/commands",
+			"home/.config/opencode/skills/skill1",
+			// qwen
+			"home/.qwen/skills/qskill",
+			// openclaw
+			"home/.openclaw/skills/oskill",
+			// windsurf
+			"home/.windsurf/rules",
+			"project/.windsurf/rules",
+			// kilocode
+			"home/.kilocode/skills/kskill",
+			"project/.kilocode/rules",
+			"project/.kilocode/skills/pskills",
+		},
+	}
+	tempRoot := mfs.setup(t)
+	homeDir := filepath.Join(tempRoot, "home")
+	projectDir := filepath.Join(tempRoot, "project")
+
+	tests := []struct {
+		name           string
+		fn             func(string, string) AgentResult
+		expectedSkills int
+		expectedMCP    int
+		expectedHooks  int
+	}{
+		{"ClaudeCode", scanClaudeCode, 4, 1, 1},
+		{"Cline", scanCline, 3, 0, 0},
+		{"Cursor", scanCursor, 1, 1, 0},
+		{"OpenCode", scanOpenCode, 4, 2, 0},
+		{"Codex", scanCodex, 1, 1, 0},
+		{"Qwen", scanQwen, 1, 1, 0},
+		{"OpenClaw", scanOpenClaw, 1, 2, 0},
+		{"Windsurf", scanWindsurf, 3, 1, 0},
+		{"Aider", scanAider, 2, 0, 0},
+		{"Continue", scanContinue, 3, 0, 0},
+		{"Copilot", scanCopilot, 1, 0, 0},
+		{"Kilocode", scanKilocode, 4, 1, 0},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			result := tc.fn(projectDir, homeDir)
+			if result.Skills != tc.expectedSkills {
+				t.Errorf("Expected %d skills, got %d", tc.expectedSkills, result.Skills)
+			}
+			if result.MCP != tc.expectedMCP {
+				t.Errorf("Expected %d MCP, got %d", tc.expectedMCP, result.MCP)
+			}
+			if result.Hooks != tc.expectedHooks {
+				t.Errorf("Expected %d hooks, got %d", tc.expectedHooks, result.Hooks)
+			}
+		})
+	}
+}

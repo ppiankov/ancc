@@ -35,6 +35,89 @@ const (
 	pathTypeCustom
 )
 
+func skillDirHome(path, comment string) pathSpec {
+	return pathSpec{
+		Path:          path,
+		SourcePrefix:  "~/",
+		Type:          pathTypeDirSkills,
+		RecursiveSize: true,
+		Comment:       comment,
+	}
+}
+
+func skillDirProject(path, comment string) pathSpec {
+	return pathSpec{
+		Path:          path,
+		SourcePrefix:  "./",
+		Type:          pathTypeDirSkills,
+		RecursiveSize: true,
+		Comment:       comment,
+	}
+}
+
+func dirFilesHome(path, comment string) pathSpec {
+	return pathSpec{
+		Path:         path,
+		SourcePrefix: "~/",
+		Type:         pathTypeDirFiles,
+		Comment:      comment,
+	}
+}
+
+func dirFilesProject(path, comment string) pathSpec {
+	return pathSpec{
+		Path:         path,
+		SourcePrefix: "./",
+		Type:         pathTypeDirFiles,
+		Comment:      comment,
+	}
+}
+
+func configFileHome(path, comment string, parse func(string, *AgentResult) (bool, int64)) pathSpec {
+	return pathSpec{
+		Path:         path,
+		SourcePrefix: "~/",
+		Parse:        parse,
+		Comment:      comment,
+	}
+}
+
+func configFileProject(path, comment string, parse func(string, *AgentResult) (bool, int64)) pathSpec {
+	return pathSpec{
+		Path:         path,
+		SourcePrefix: "./",
+		Parse:        parse,
+		Comment:      comment,
+	}
+}
+
+func fileHome(path, comment string) pathSpec {
+	return pathSpec{
+		Path:         path,
+		SourcePrefix: "~/",
+		Type:         pathTypeFile,
+		Comment:      comment,
+	}
+}
+
+func fileProject(path, comment string) pathSpec {
+	return pathSpec{
+		Path:         path,
+		SourcePrefix: "./",
+		Type:         pathTypeFile,
+		Comment:      comment,
+	}
+}
+
+func customDirProject(path, comment string) pathSpec {
+	return pathSpec{
+		Path:         path,
+		SourcePrefix: "./",
+		Type:         pathTypeCustom,
+		Comment:      comment,
+	}
+}
+
 func scanAgentPaths(projectDir, homeDir string, spec agentPathSpec) AgentResult {
 	r := AgentResult{Name: spec.Name, Advisory: spec.Advisory}
 
@@ -376,20 +459,15 @@ func scanClaudeCode(projectDir, homeDir string) AgentResult {
 		Name:      AgentClaudeCode,
 		ConfigDir: ".claude",
 		Home: []pathSpec{
-			{
-				Path: ".claude/settings.json", SourcePrefix: "~/",
-				Parse: func(path string, r *AgentResult) (bool, int64) {
-					return parseClaudeSettings(path, r)
-				},
-			},
-			{Path: ".claude/skills", SourcePrefix: "~/", Type: pathTypeDirSkills, RecursiveSize: true},
-			{Path: ".claude/CLAUDE.md", SourcePrefix: "~/", Type: pathTypeFile},
+			configFileHome(".claude/settings.json", "", parseClaudeSettings),
+			skillDirHome(".claude/skills", ""),
+			fileHome(".claude/CLAUDE.md", ""),
 		},
 		Project: []pathSpec{
-			{Path: ".claude/skills", SourcePrefix: "./", Type: pathTypeDirSkills, RecursiveSize: true},
-			{Path: "CLAUDE.md", SourcePrefix: "./", Type: pathTypeFile},
-			{Path: ".claude/settings.local.json", SourcePrefix: "./", Type: pathTypeFile},
-			{Path: "CLAUDE.local.md", SourcePrefix: "./", Type: pathTypeFile},
+			skillDirProject(".claude/skills", ""),
+			fileProject("CLAUDE.md", ""),
+			fileProject(".claude/settings.local.json", ""),
+			fileProject("CLAUDE.local.md", ""),
 		},
 	}
 	return scanAgentPaths(projectDir, homeDir, spec)
@@ -400,10 +478,10 @@ func scanCline(projectDir, homeDir string) AgentResult {
 		Name:      AgentCline,
 		ConfigDir: ".cline",
 		Home: []pathSpec{
-			{Path: ".cline/skills", SourcePrefix: "~/", Type: pathTypeDirSkills, RecursiveSize: true},
+			skillDirHome(".cline/skills", ""),
 		},
 		Project: []pathSpec{
-			{Path: ".clinerules", SourcePrefix: "./", Type: pathTypeDirFiles},
+			dirFilesProject(".clinerules", ""),
 		},
 	}
 	return scanAgentPaths(projectDir, homeDir, spec)
@@ -414,15 +492,10 @@ func scanCursor(projectDir, homeDir string) AgentResult {
 		Name:      AgentCursor,
 		ConfigDir: ".cursor",
 		Home: []pathSpec{
-			{
-				Path: ".cursor/mcp.json", SourcePrefix: "~/",
-				Parse: func(path string, r *AgentResult) (bool, int64) {
-					return parseMCPServers(path, r)
-				},
-			},
+			configFileHome(".cursor/mcp.json", "", parseMCPServers),
 		},
 		Project: []pathSpec{
-			{Path: ".cursor/rules", SourcePrefix: "./", Type: pathTypeCustom},
+			customDirProject(".cursor/rules", ""),
 		},
 	}
 	return scanAgentPaths(projectDir, homeDir, spec)
@@ -434,22 +507,12 @@ func scanOpenCode(projectDir, homeDir string) AgentResult {
 		Advisory:  true,
 		ConfigDir: ".config/opencode",
 		Home: []pathSpec{
-			{
-				Path: ".config/opencode/opencode.json", SourcePrefix: "~/", Comment: "(advisory)",
-				Parse: func(path string, r *AgentResult) (bool, int64) {
-					return parseOpenCodeJSON(path, r)
-				},
-			},
-			{Path: ".config/opencode/commands", SourcePrefix: "~/", Type: pathTypeDirFiles, Comment: "(advisory)"},
-			{Path: ".config/opencode/skills", SourcePrefix: "~/", Type: pathTypeDirSkills, RecursiveSize: true, Comment: "(advisory)"},
+			configFileHome(".config/opencode/opencode.json", "(advisory)", parseOpenCodeJSON),
+			dirFilesHome(".config/opencode/commands", "(advisory)"),
+			skillDirHome(".config/opencode/skills", "(advisory)"),
 		},
 		Project: []pathSpec{
-			{
-				Path: "opencode.json", SourcePrefix: "./", Comment: "(advisory)",
-				Parse: func(path string, r *AgentResult) (bool, int64) {
-					return parseOpenCodeJSON(path, r)
-				},
-			},
+			configFileProject("opencode.json", "(advisory)", parseOpenCodeJSON),
 		},
 	}
 	return scanAgentPaths(projectDir, homeDir, spec)
@@ -461,18 +524,13 @@ func scanCodex(projectDir, homeDir string) AgentResult {
 		Advisory:  true,
 		ConfigDir: ".codex",
 		Home: []pathSpec{
-			{Path: ".codex/AGENTS.md", SourcePrefix: "~/", Type: pathTypeFile, Comment: "(advisory)"},
-			{Path: ".codex/skills", SourcePrefix: "~/", Type: pathTypeDirSkills, RecursiveSize: true, Comment: "(advisory)"},
-			{
-				Path: ".codex/config.toml", SourcePrefix: "~/", Comment: "(advisory)",
-				Parse: func(path string, r *AgentResult) (bool, int64) {
-					return parseCodexTOMLMCP(path, r)
-				},
-			},
+			fileHome(".codex/AGENTS.md", "(advisory)"),
+			skillDirHome(".codex/skills", "(advisory)"),
+			configFileHome(".codex/config.toml", "(advisory)", parseCodexTOMLMCP),
 		},
 		Project: []pathSpec{
-			{Path: "AGENTS.md", SourcePrefix: "./", Type: pathTypeFile, Comment: "(advisory)"},
-			{Path: ".codex", SourcePrefix: "./", Type: pathTypeDirFiles},
+			fileProject("AGENTS.md", "(advisory)"),
+			dirFilesProject(".codex", ""),
 		},
 	}
 	return scanAgentPaths(projectDir, homeDir, spec)
@@ -484,13 +542,8 @@ func scanQwen(projectDir, homeDir string) AgentResult {
 		Advisory:  true,
 		ConfigDir: ".qwen",
 		Home: []pathSpec{
-			{Path: ".qwen/skills", SourcePrefix: "~/", Type: pathTypeDirSkills, RecursiveSize: true, Comment: "(advisory)"},
-			{
-				Path: ".qwen/settings.json", SourcePrefix: "~/", Comment: "(advisory)",
-				Parse: func(path string, r *AgentResult) (bool, int64) {
-					return parseMCPServers(path, r)
-				},
-			},
+			skillDirHome(".qwen/skills", "(advisory)"),
+			configFileHome(".qwen/settings.json", "(advisory)", parseMCPServers),
 		},
 	}
 	return scanAgentPaths(projectDir, homeDir, spec)
@@ -502,19 +555,9 @@ func scanOpenClaw(projectDir, homeDir string) AgentResult {
 		Advisory:  true,
 		ConfigDir: ".openclaw",
 		Home: []pathSpec{
-			{Path: ".openclaw/skills", SourcePrefix: "~/", Type: pathTypeDirSkills, RecursiveSize: true, Comment: "(advisory)"},
-			{
-				Path: ".openclaw/openclaw.json", SourcePrefix: "~/", Comment: "(advisory)",
-				Parse: func(path string, r *AgentResult) (bool, int64) {
-					return parseMCPServers(path, r)
-				},
-			},
-			{
-				Path: ".openclaw/config/mcporter.json", SourcePrefix: "~/", Comment: "(advisory)",
-				Parse: func(path string, r *AgentResult) (bool, int64) {
-					return parseMCPServers(path, r)
-				},
-			},
+			skillDirHome(".openclaw/skills", "(advisory)"),
+			configFileHome(".openclaw/openclaw.json", "(advisory)", parseMCPServers),
+			configFileHome(".openclaw/config/mcporter.json", "(advisory)", parseMCPServers),
 		},
 	}
 	return scanAgentPaths(projectDir, homeDir, spec)
@@ -525,17 +568,12 @@ func scanWindsurf(projectDir, homeDir string) AgentResult {
 		Name:      AgentWindsurf,
 		ConfigDir: ".windsurf",
 		Home: []pathSpec{
-			{Path: ".windsurf/rules", SourcePrefix: "~/", Type: pathTypeDirFiles},
-			{
-				Path: ".codeium/windsurf/mcp_config.json", SourcePrefix: "~/",
-				Parse: func(path string, r *AgentResult) (bool, int64) {
-					return parseMCPServers(path, r)
-				},
-			},
+			dirFilesHome(".windsurf/rules", ""),
+			configFileHome(".codeium/windsurf/mcp_config.json", "", parseMCPServers),
 		},
 		Project: []pathSpec{
-			{Path: ".windsurfrules", SourcePrefix: "./", Type: pathTypeFile},
-			{Path: ".windsurf/rules", SourcePrefix: "./", Type: pathTypeDirFiles},
+			fileProject(".windsurfrules", ""),
+			dirFilesProject(".windsurf/rules", ""),
 		},
 	}
 	return scanAgentPaths(projectDir, homeDir, spec)
@@ -547,10 +585,10 @@ func scanAider(projectDir, homeDir string) AgentResult {
 		Advisory:  true,
 		ConfigDir: "",
 		Home: []pathSpec{
-			{Path: ".aider.conf.yml", SourcePrefix: "~/", Type: pathTypeFile, Comment: "(advisory)"},
+			fileHome(".aider.conf.yml", "(advisory)"),
 		},
 		Project: []pathSpec{
-			{Path: ".aider.conf.yml", SourcePrefix: "./", Type: pathTypeFile, Comment: "(advisory)"},
+			fileProject(".aider.conf.yml", "(advisory)"),
 		},
 	}
 	return scanAgentPaths(projectDir, homeDir, spec)
@@ -562,11 +600,11 @@ func scanContinue(projectDir, homeDir string) AgentResult {
 		Advisory:  true,
 		ConfigDir: ".continue",
 		Home: []pathSpec{
-			{Path: ".continue/config.yaml", SourcePrefix: "~/", Type: pathTypeFile, Comment: "(advisory)"},
-			{Path: ".continue/config.json", SourcePrefix: "~/", Type: pathTypeFile, Comment: "(advisory)"},
+			fileHome(".continue/config.yaml", "(advisory)"),
+			fileHome(".continue/config.json", "(advisory)"),
 		},
 		Project: []pathSpec{
-			{Path: ".continuerc.json", SourcePrefix: "./", Type: pathTypeFile, Comment: "(advisory)"},
+			fileProject(".continuerc.json", "(advisory)"),
 		},
 	}
 	return scanAgentPaths(projectDir, homeDir, spec)
@@ -577,7 +615,7 @@ func scanCopilot(projectDir, homeDir string) AgentResult {
 		Name:      AgentCopilot,
 		ConfigDir: "",
 		Project: []pathSpec{
-			{Path: ".github/copilot-instructions.md", SourcePrefix: "./", Type: pathTypeFile},
+			fileProject(".github/copilot-instructions.md", ""),
 		},
 	}
 	return scanAgentPaths(projectDir, homeDir, spec)
@@ -588,17 +626,12 @@ func scanKilocode(projectDir, homeDir string) AgentResult {
 		Name:      AgentKilocode,
 		ConfigDir: ".kilocode",
 		Home: []pathSpec{
-			{Path: ".kilocode/skills", SourcePrefix: "~/", Type: pathTypeDirSkills, RecursiveSize: true},
-			{
-				Path: ".config/kilo/opencode.json", SourcePrefix: "~/",
-				Parse: func(path string, r *AgentResult) (bool, int64) {
-					return parseOpenCodeJSON(path, r)
-				},
-			},
+			skillDirHome(".kilocode/skills", ""),
+			configFileHome(".config/kilo/opencode.json", "", parseOpenCodeJSON),
 		},
 		Project: []pathSpec{
-			{Path: ".kilocode/rules", SourcePrefix: "./", Type: pathTypeDirFiles},
-			{Path: ".kilocode/skills", SourcePrefix: "./", Type: pathTypeDirSkills, RecursiveSize: true},
+			dirFilesProject(".kilocode/rules", ""),
+			skillDirProject(".kilocode/skills", ""),
 		},
 	}
 	return scanAgentPaths(projectDir, homeDir, spec)
