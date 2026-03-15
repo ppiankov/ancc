@@ -402,9 +402,11 @@ ancc doctor --format json | jq '.status'
 | qwen | `~/.qwen/skills/`, `~/.qwen/settings.json` | Yes |
 | openclaw | `~/.openclaw/skills/`, `~/.openclaw/openclaw.json`, `~/.openclaw/config/mcporter.json` | Yes |
 | windsurf | `.windsurfrules`, `.windsurf/rules/`, `~/.windsurf/rules/`, `~/.codeium/windsurf/mcp_config.json` | No |
-| aider | `.aider.conf.yml`, `~/.aider.conf.yml` | Yes |
+| aider | `~/.aider.conf.yml`, `~/.aider/skills/`, `.aider.conf.yml`, `CONVENTIONS.md` | Yes |
 | continue | `~/.continue/config.yaml`, `~/.continue/config.json`, `.continuerc.json` | Yes |
-| copilot | `.github/copilot-instructions.md` | No |
+| copilot | `~/.copilot/skills/`, `.github/copilot-instructions.md`, `AGENTS.md` | No |
 | kilocode | `~/.kilocode/skills/`, `~/.config/kilo/opencode.json`, `.kilocode/rules/`, `.kilocode/skills/` | No |
+| vibe | `~/.vibe/skills/`, `AGENTS.md` (project) | Yes |
+| goose | `~/.config/goose/config.yaml`, `.goosehints` | Yes |
 
 Advisory agents are detected but not considered primary — their config paths are labeled accordingly in output.

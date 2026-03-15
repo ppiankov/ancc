@@ -583,12 +583,14 @@ func scanAider(projectDir, homeDir string) AgentResult {
 	spec := agentPathSpec{
 		Name:      AgentAider,
 		Advisory:  true,
-		ConfigDir: "",
+		ConfigDir: ".aider",
 		Home: []pathSpec{
 			fileHome(".aider.conf.yml", "(advisory)"),
+			skillDirHome(".aider/skills", "(advisory)"),
 		},
 		Project: []pathSpec{
 			fileProject(".aider.conf.yml", "(advisory)"),
+			fileProject("CONVENTIONS.md", "(advisory)"),
 		},
 	}
 	return scanAgentPaths(projectDir, homeDir, spec)
@@ -613,9 +615,13 @@ func scanContinue(projectDir, homeDir string) AgentResult {
 func scanCopilot(projectDir, homeDir string) AgentResult {
 	spec := agentPathSpec{
 		Name:      AgentCopilot,
-		ConfigDir: "",
+		ConfigDir: ".copilot",
+		Home: []pathSpec{
+			skillDirHome(".copilot/skills", ""),
+		},
 		Project: []pathSpec{
 			fileProject(".github/copilot-instructions.md", ""),
+			fileProject("AGENTS.md", ""),
 		},
 	}
 	return scanAgentPaths(projectDir, homeDir, spec)
@@ -632,6 +638,36 @@ func scanKilocode(projectDir, homeDir string) AgentResult {
 		Project: []pathSpec{
 			dirFilesProject(".kilocode/rules", ""),
 			skillDirProject(".kilocode/skills", ""),
+		},
+	}
+	return scanAgentPaths(projectDir, homeDir, spec)
+}
+
+func scanVibe(projectDir, homeDir string) AgentResult {
+	spec := agentPathSpec{
+		Name:      AgentVibe,
+		Advisory:  true,
+		ConfigDir: ".vibe",
+		Home: []pathSpec{
+			skillDirHome(".vibe/skills", "(advisory)"),
+		},
+		Project: []pathSpec{
+			fileProject("AGENTS.md", "(advisory)"),
+		},
+	}
+	return scanAgentPaths(projectDir, homeDir, spec)
+}
+
+func scanGoose(projectDir, homeDir string) AgentResult {
+	spec := agentPathSpec{
+		Name:      AgentGoose,
+		Advisory:  true,
+		ConfigDir: ".config/goose",
+		Home: []pathSpec{
+			fileHome(".config/goose/config.yaml", "(advisory)"),
+		},
+		Project: []pathSpec{
+			fileProject(".goosehints", "(advisory)"),
 		},
 	}
 	return scanAgentPaths(projectDir, homeDir, spec)

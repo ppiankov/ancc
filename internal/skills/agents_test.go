@@ -228,6 +228,11 @@ func TestAllAgents(t *testing.T) {
 			// kilocode
 			"home/.config/kilo/opencode.json":  `{"mcp": {"kilocode1": {}}, "instructions": [{}]}`,
 			"project/.kilocode/rules/rule.txt": "rule",
+			// aider expanded
+			"project/CONVENTIONS.md": "conventions",
+			// goose
+			"home/.config/goose/config.yaml": "provider: anthropic",
+			"project/.goosehints":            "goose hints",
 		},
 		dirs: []string{
 			"home/.claude/skills/homeskill",
@@ -251,6 +256,10 @@ func TestAllAgents(t *testing.T) {
 			"home/.kilocode/skills/kskill",
 			"project/.kilocode/rules",
 			"project/.kilocode/skills/pskills",
+			// aider expanded
+			"home/.aider/skills/review",
+			// vibe
+			"home/.vibe/skills/commit",
 		},
 	}
 	tempRoot := mfs.setup(t)
@@ -272,10 +281,12 @@ func TestAllAgents(t *testing.T) {
 		{"Qwen", scanQwen, 1, 1, 0},
 		{"OpenClaw", scanOpenClaw, 1, 2, 0},
 		{"Windsurf", scanWindsurf, 3, 1, 0},
-		{"Aider", scanAider, 2, 0, 0},
+		{"Aider", scanAider, 4, 0, 0}, // home conf + home skill dir + project conf + CONVENTIONS.md
 		{"Continue", scanContinue, 3, 0, 0},
-		{"Copilot", scanCopilot, 1, 0, 0},
+		{"Copilot", scanCopilot, 2, 0, 0}, // instructions + AGENTS.md
 		{"Kilocode", scanKilocode, 4, 1, 0},
+		{"Vibe", scanVibe, 2, 0, 0},   // home skill dir + project AGENTS.md
+		{"Goose", scanGoose, 2, 0, 0}, // home config + project .goosehints
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {

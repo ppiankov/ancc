@@ -17,6 +17,8 @@ const (
 	AgentContinue   = "continue"
 	AgentCopilot    = "copilot"
 	AgentKilocode   = "kilocode"
+	AgentVibe       = "vibe"
+	AgentGoose      = "goose"
 )
 
 // DefaultContextWindows maps agent names to default context window sizes in tokens.
@@ -33,6 +35,8 @@ var DefaultContextWindows = map[string]int64{
 	AgentContinue:   128_000,
 	AgentCopilot:    128_000,
 	AgentKilocode:   128_000,
+	AgentVibe:       128_000,
+	AgentGoose:      128_000,
 }
 
 const defaultContextWindow int64 = 128_000

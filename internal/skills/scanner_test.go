@@ -1697,3 +1697,241 @@ func TestScanKilocode_ConfigDir(t *testing.T) {
 		t.Errorf("config_dir = %q, want %q", r.ConfigDir, "~/.kilocode")
 	}
 }
+
+// --- scanAider expanded paths ---
+
+func TestScanAider_Conventions(t *testing.T) {
+	proj := t.TempDir()
+	writeTestFile(t, filepath.Join(proj, "CONVENTIONS.md"), "# Conventions\nUse Go.")
+
+	r := scanAider(proj, "")
+	if r.Skills != 1 {
+		t.Errorf("skills = %d, want 1", r.Skills)
+	}
+}
+
+func TestScanAider_HomeSkills(t *testing.T) {
+	home := t.TempDir()
+	mkdirAll(t, filepath.Join(home, ".aider", "skills", "review"))
+	mkdirAll(t, filepath.Join(home, ".aider", "skills", "commit"))
+
+	r := scanAider(t.TempDir(), home)
+	if r.Skills != 2 {
+		t.Errorf("skills = %d, want 2", r.Skills)
+	}
+}
+
+func TestScanAider_AllExpanded(t *testing.T) {
+	home := t.TempDir()
+	proj := t.TempDir()
+
+	writeTestFile(t, filepath.Join(home, ".aider.conf.yml"), "model: gpt-4")
+	mkdirAll(t, filepath.Join(home, ".aider", "skills", "review"))
+	writeTestFile(t, filepath.Join(proj, ".aider.conf.yml"), "model: claude")
+	writeTestFile(t, filepath.Join(proj, "CONVENTIONS.md"), "# Conventions")
+
+	r := scanAider(proj, home)
+	if r.Skills != 4 { // home conf + 1 home skill dir + project conf + CONVENTIONS.md
+		t.Errorf("skills = %d, want 4", r.Skills)
+	}
+	if len(r.Sources) != 4 {
+		t.Errorf("sources = %d, want 4", len(r.Sources))
+	}
+}
+
+func TestScanAider_ConfigDir(t *testing.T) {
+	home := t.TempDir()
+	mkdirAll(t, filepath.Join(home, ".aider", "skills", "review"))
+
+	r := scanAider(t.TempDir(), home)
+	if r.ConfigDir != "~/.aider" {
+		t.Errorf("config_dir = %q, want %q", r.ConfigDir, "~/.aider")
+	}
+}
+
+// --- scanCopilot expanded paths ---
+
+func TestScanCopilot_ProjectAgentsMD(t *testing.T) {
+	proj := t.TempDir()
+	writeTestFile(t, filepath.Join(proj, "AGENTS.md"), "# Agents")
+
+	r := scanCopilot(proj, "")
+	if r.Skills != 1 {
+		t.Errorf("skills = %d, want 1", r.Skills)
+	}
+}
+
+func TestScanCopilot_HomeSkills(t *testing.T) {
+	home := t.TempDir()
+	mkdirAll(t, filepath.Join(home, ".copilot", "skills", "review"))
+	mkdirAll(t, filepath.Join(home, ".copilot", "skills", "commit"))
+
+	r := scanCopilot(t.TempDir(), home)
+	if r.Skills != 2 {
+		t.Errorf("skills = %d, want 2", r.Skills)
+	}
+}
+
+func TestScanCopilot_AllExpanded(t *testing.T) {
+	home := t.TempDir()
+	proj := t.TempDir()
+
+	mkdirAll(t, filepath.Join(home, ".copilot", "skills", "review"))
+	writeTestFile(t, filepath.Join(proj, ".github", "copilot-instructions.md"), "instructions")
+	writeTestFile(t, filepath.Join(proj, "AGENTS.md"), "# Agents")
+
+	r := scanCopilot(proj, home)
+	if r.Skills != 3 { // 1 home skill dir + instructions + AGENTS.md
+		t.Errorf("skills = %d, want 3", r.Skills)
+	}
+	if len(r.Sources) != 3 {
+		t.Errorf("sources = %d, want 3", len(r.Sources))
+	}
+}
+
+func TestScanCopilot_ConfigDir(t *testing.T) {
+	home := t.TempDir()
+	mkdirAll(t, filepath.Join(home, ".copilot", "skills", "review"))
+
+	r := scanCopilot(t.TempDir(), home)
+	if r.ConfigDir != "~/.copilot" {
+		t.Errorf("config_dir = %q, want %q", r.ConfigDir, "~/.copilot")
+	}
+}
+
+// --- scanVibe ---
+
+func TestScanVibe_NoConfig(t *testing.T) {
+	r := scanVibe(t.TempDir(), t.TempDir())
+	if r.Skills != 0 || r.MCP != 0 {
+		t.Errorf("expected zeros, got skills=%d mcp=%d", r.Skills, r.MCP)
+	}
+	if !r.Advisory {
+		t.Error("expected advisory=true")
+	}
+}
+
+func TestScanVibe_HomeSkills(t *testing.T) {
+	home := t.TempDir()
+	mkdirAll(t, filepath.Join(home, ".vibe", "skills", "review"))
+	mkdirAll(t, filepath.Join(home, ".vibe", "skills", "commit"))
+
+	r := scanVibe(t.TempDir(), home)
+	if r.Skills != 2 {
+		t.Errorf("skills = %d, want 2", r.Skills)
+	}
+}
+
+func TestScanVibe_ProjectAgentsMD(t *testing.T) {
+	proj := t.TempDir()
+	writeTestFile(t, filepath.Join(proj, "AGENTS.md"), "# Agents")
+
+	r := scanVibe(proj, "")
+	if r.Skills != 1 {
+		t.Errorf("skills = %d, want 1", r.Skills)
+	}
+}
+
+func TestScanVibe_HomeAndProject(t *testing.T) {
+	home := t.TempDir()
+	proj := t.TempDir()
+
+	mkdirAll(t, filepath.Join(home, ".vibe", "skills", "commit"))
+	writeTestFile(t, filepath.Join(proj, "AGENTS.md"), "# Agents")
+
+	r := scanVibe(proj, home)
+	if r.Skills != 2 {
+		t.Errorf("skills = %d, want 2", r.Skills)
+	}
+	if len(r.Sources) != 2 {
+		t.Errorf("sources = %d, want 2", len(r.Sources))
+	}
+}
+
+func TestScanVibe_ConfigDir(t *testing.T) {
+	home := t.TempDir()
+	mkdirAll(t, filepath.Join(home, ".vibe", "skills", "commit"))
+
+	r := scanVibe(t.TempDir(), home)
+	if r.ConfigDir != "~/.vibe" {
+		t.Errorf("config_dir = %q, want %q", r.ConfigDir, "~/.vibe")
+	}
+}
+
+func TestScanVibe_Tokens(t *testing.T) {
+	proj := t.TempDir()
+	writeTestFile(t, filepath.Join(proj, "AGENTS.md"), strings.Repeat("v", 200))
+
+	r := scanVibe(proj, "")
+	if r.Tokens != 50 { // 200 / 4
+		t.Errorf("tokens = %d, want 50", r.Tokens)
+	}
+}
+
+// --- scanGoose ---
+
+func TestScanGoose_NoConfig(t *testing.T) {
+	r := scanGoose(t.TempDir(), t.TempDir())
+	if r.Skills != 0 || r.MCP != 0 {
+		t.Errorf("expected zeros, got skills=%d mcp=%d", r.Skills, r.MCP)
+	}
+	if !r.Advisory {
+		t.Error("expected advisory=true")
+	}
+}
+
+func TestScanGoose_HomeConfig(t *testing.T) {
+	home := t.TempDir()
+	writeTestFile(t, filepath.Join(home, ".config", "goose", "config.yaml"), "provider: anthropic")
+
+	r := scanGoose(t.TempDir(), home)
+	if r.Skills != 1 {
+		t.Errorf("skills = %d, want 1", r.Skills)
+	}
+}
+
+func TestScanGoose_ProjectHints(t *testing.T) {
+	proj := t.TempDir()
+	writeTestFile(t, filepath.Join(proj, ".goosehints"), "Use Go. Run tests.")
+
+	r := scanGoose(proj, "")
+	if r.Skills != 1 {
+		t.Errorf("skills = %d, want 1", r.Skills)
+	}
+}
+
+func TestScanGoose_HomeAndProject(t *testing.T) {
+	home := t.TempDir()
+	proj := t.TempDir()
+
+	writeTestFile(t, filepath.Join(home, ".config", "goose", "config.yaml"), "provider: anthropic")
+	writeTestFile(t, filepath.Join(proj, ".goosehints"), "Use Go.")
+
+	r := scanGoose(proj, home)
+	if r.Skills != 2 {
+		t.Errorf("skills = %d, want 2", r.Skills)
+	}
+	if len(r.Sources) != 2 {
+		t.Errorf("sources = %d, want 2", len(r.Sources))
+	}
+}
+
+func TestScanGoose_ConfigDir(t *testing.T) {
+	home := t.TempDir()
+	writeTestFile(t, filepath.Join(home, ".config", "goose", "config.yaml"), "provider: anthropic")
+
+	r := scanGoose(t.TempDir(), home)
+	if r.ConfigDir != "~/.config/goose" {
+		t.Errorf("config_dir = %q, want %q", r.ConfigDir, "~/.config/goose")
+	}
+}
+
+func TestScanGoose_Tokens(t *testing.T) {
+	proj := t.TempDir()
+	writeTestFile(t, filepath.Join(proj, ".goosehints"), strings.Repeat("g", 80))
+
+	r := scanGoose(proj, "")
+	if r.Tokens != 20 { // 80 / 4
+		t.Errorf("tokens = %d, want 20", r.Tokens)
+	}
+}
