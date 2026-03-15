@@ -665,6 +665,7 @@ func scanGoose(projectDir, homeDir string) AgentResult {
 		ConfigDir: ".config/goose",
 		Home: []pathSpec{
 			fileHome(".config/goose/config.yaml", "(advisory)"),
+			skillDirHome(".config/goose/skills", "(advisory)"),
 		},
 		Project: []pathSpec{
 			fileProject(".goosehints", "(advisory)"),
