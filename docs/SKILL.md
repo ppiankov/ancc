@@ -407,6 +407,6 @@ ancc doctor --format json | jq '.status'
 | copilot | `~/.copilot/skills/`, `.github/copilot-instructions.md`, `AGENTS.md` | No |
 | kilocode | `~/.kilocode/skills/`, `~/.config/kilo/opencode.json`, `.kilocode/rules/`, `.kilocode/skills/` | No |
 | vibe | `~/.vibe/skills/`, `AGENTS.md` (project) | Yes |
-| goose | `~/.config/goose/config.yaml`, `.goosehints` | Yes |
+| goose | `~/.config/goose/config.yaml`, `~/.config/goose/skills/`, `.goosehints` | Yes |
 
 Advisory agents are detected but not considered primary — their config paths are labeled accordingly in output.
