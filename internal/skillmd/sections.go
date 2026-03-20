@@ -8,6 +8,13 @@ const (
 	SectionParsingExamples = "Parsing examples"
 )
 
+// Optional section headings.
+const (
+	SectionHandoffs     = "Handoffs"
+	SectionDeprecated   = "Deprecated"
+	SectionFailureModes = "Failure Modes"
+)
+
 // Per-command subsections.
 const (
 	SubsectionFlags      = "Flags"

@@ -92,6 +92,10 @@ func generateTemplate(name string) string {
 	b.WriteString("### " + name + " doctor\n\n")
 	b.WriteString("Check environment health.\n\n")
 
+	b.WriteString("## Handoffs\n\n")
+	b.WriteString("- Output: structured JSON. Next: a diagnostic tool for root cause analysis.\n")
+	b.WriteString("- Refused questions: why is it broken, should we fix it.\n\n")
+
 	b.WriteString("## What this does NOT do\n\n")
 	b.WriteString("- Does not execute or install the target tool — validation only\n")
 	b.WriteString("- Does not modify source code or manage configurations\n")

@@ -34,6 +34,12 @@ const (
 	CheckNotDoBoundaryVerbs = "not-do-boundary-verbs"
 	// Scope pressure check.
 	CheckScopePressure = "scope-pressure"
+	// Phase 2: spec + policy checks.
+	CheckDoctorOutputValid    = "doctor-output-valid"
+	CheckHandoffSection       = "handoff-section"
+	CheckProvenanceDocumented = "provenance-documented"
+	CheckDeprecatedCommands   = "deprecated-commands"
+	CheckFailureModes         = "failure-modes-documented"
 	// Semantic quality checks.
 	CheckTriggerActionable    = "trigger-actionable"
 	CheckToolReferencesValid  = "tool-references-valid"
@@ -662,6 +668,122 @@ func checkScopePressure(sf *skillmd.SkillFile) CheckResult {
 			fmt.Sprintf("skill file has %d sections; consider splitting", len(sf.Sections)))
 	}
 	return pass(CheckScopePressure, fmt.Sprintf("%d commands, %d sections", len(sf.Commands), len(sf.Sections)))
+}
+
+// --- Phase 2 checks ---
+
+// checkDoctorOutputValid validates doctor command JSON output has required fields.
+func checkDoctorOutputValid(sf *skillmd.SkillFile) CheckResult {
+	for _, cmd := range sf.Commands {
+		if !strings.HasSuffix(cmd.Name, " doctor") && cmd.Name != "doctor" {
+			continue
+		}
+		if cmd.JSONOutput == "" {
+			return pass(CheckDoctorOutputValid, "doctor command has no JSON example (optional)")
+		}
+		var doc map[string]interface{}
+		if err := json.Unmarshal([]byte(cmd.JSONOutput), &doc); err != nil {
+			return warn(CheckDoctorOutputValid, "doctor JSON output is not valid JSON")
+		}
+		if _, ok := doc["status"]; !ok {
+			return warn(CheckDoctorOutputValid, "doctor output missing required 'status' field")
+		}
+		checks, ok := doc["checks"]
+		if !ok {
+			return warn(CheckDoctorOutputValid, "doctor output missing required 'checks' array")
+		}
+		if arr, ok := checks.([]interface{}); ok && len(arr) > 0 {
+			if entry, ok := arr[0].(map[string]interface{}); ok {
+				if _, ok := entry["name"]; !ok {
+					return warn(CheckDoctorOutputValid, "doctor checks[0] missing 'name' field")
+				}
+				if _, ok := entry["status"]; !ok {
+					return warn(CheckDoctorOutputValid, "doctor checks[0] missing 'status' field")
+				}
+			}
+		}
+		return pass(CheckDoctorOutputValid, "doctor JSON output matches schema")
+	}
+	return pass(CheckDoctorOutputValid, "no doctor command (checked elsewhere)")
+}
+
+// checkHandoffSection recommends a Handoffs section when the tool has 3+ commands.
+func checkHandoffSection(sf *skillmd.SkillFile) CheckResult {
+	if sf.Sections[skillmd.SectionHandoffs] != nil {
+		return pass(CheckHandoffSection, "Handoffs section found")
+	}
+	if len(sf.Commands) >= 3 {
+		return warn(CheckHandoffSection, "3+ commands documented; consider adding ## Handoffs section")
+	}
+	return pass(CheckHandoffSection, "Handoffs section not needed (<3 commands)")
+}
+
+// checkProvenanceDocumented warns if JSON examples mix provenance signals without a provenance field.
+func checkProvenanceDocumented(sf *skillmd.SkillFile) CheckResult {
+	provenanceValues := []string{"observed", "declared", "inferred", "unknown"}
+	for _, cmd := range sf.Commands {
+		if cmd.JSONOutput == "" {
+			continue
+		}
+		lower := strings.ToLower(cmd.JSONOutput)
+		hasProvenanceField := strings.Contains(lower, "\"provenance\"") || strings.Contains(lower, "\"source\"")
+		mixedSignals := 0
+		for _, pv := range provenanceValues {
+			if strings.Contains(lower, "\""+pv+"\"") {
+				mixedSignals++
+			}
+		}
+		if mixedSignals >= 2 && !hasProvenanceField {
+			return warn(CheckProvenanceDocumented, fmt.Sprintf("command %s mixes provenance values without a provenance field", cmd.Name))
+		}
+	}
+	return pass(CheckProvenanceDocumented, "no provenance issues detected")
+}
+
+// deprecatedKeywords are words indicating a command is deprecated.
+var deprecatedKeywords = []string{"deprecated", "legacy", "obsolete", "removed", "do not use"}
+
+// checkDeprecatedCommands warns if commands appear deprecated but no Deprecated section exists.
+func checkDeprecatedCommands(sf *skillmd.SkillFile) CheckResult {
+	if sf.Sections[skillmd.SectionDeprecated] != nil {
+		return pass(CheckDeprecatedCommands, "Deprecated section documents lifecycle")
+	}
+	for _, cmd := range sf.Commands {
+		lower := strings.ToLower(cmd.Name + " " + cmd.Desc)
+		for _, kw := range deprecatedKeywords {
+			if strings.Contains(lower, kw) {
+				return warn(CheckDeprecatedCommands,
+					fmt.Sprintf("command %q appears deprecated but no ## Deprecated section exists", cmd.Name))
+			}
+		}
+	}
+	return pass(CheckDeprecatedCommands, "no deprecated commands detected")
+}
+
+// externalDependencyKeywords indicate a tool has external dependencies.
+var externalDependencyKeywords = []string{
+	"api", "http", "network", "database", "service", "remote",
+	"webhook", "endpoint", "cluster", "server",
+}
+
+// checkFailureModes recommends a Failure Modes section for complex or networked tools.
+func checkFailureModes(sf *skillmd.SkillFile) CheckResult {
+	if sf.Sections[skillmd.SectionFailureModes] != nil {
+		return pass(CheckFailureModes, "Failure Modes section found")
+	}
+	if len(sf.Commands) >= 3 {
+		return warn(CheckFailureModes, "3+ commands documented; consider adding ## Failure Modes section")
+	}
+	for _, cmd := range sf.Commands {
+		lower := strings.ToLower(cmd.Desc)
+		for _, kw := range externalDependencyKeywords {
+			if strings.Contains(lower, kw) {
+				return warn(CheckFailureModes,
+					fmt.Sprintf("command %q references %q; consider adding ## Failure Modes section", cmd.Name, kw))
+			}
+		}
+	}
+	return pass(CheckFailureModes, "Failure Modes section not needed")
 }
 
 // checkDuplicateSkillNames warns on duplicate skill names across agent configs.

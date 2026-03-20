@@ -55,8 +55,8 @@ func TestValidateCmd_JSON(t *testing.T) {
 	if err := json.Unmarshal(buf.Bytes(), &parsed); err != nil {
 		t.Fatalf("invalid JSON output: %v\nraw: %s", err, buf.String())
 	}
-	if parsed.Summary.Total != 25 {
-		t.Errorf("total = %d, want 25", parsed.Summary.Total)
+	if parsed.Summary.Total != 30 {
+		t.Errorf("total = %d, want 30", parsed.Summary.Total)
 	}
 }
 

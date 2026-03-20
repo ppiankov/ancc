@@ -161,7 +161,7 @@ func TestScanRepos_ValidRepoHasSummary(t *testing.T) {
 	if repo.Summary == nil {
 		t.Fatal("summary is nil for valid repo")
 	}
-	if repo.Summary.Total != 25 {
+	if repo.Summary.Total != 30 {
 		t.Errorf("total checks = %d, want 20", repo.Summary.Total)
 	}
 }

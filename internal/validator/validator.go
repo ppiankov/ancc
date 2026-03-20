@@ -51,6 +51,12 @@ func Validate(path string) (*ValidationResult, error) {
 			pass(CheckNotDoNoOverlap, "SKILL.md not found"),
 			pass(CheckNotDoBoundaryVerbs, "SKILL.md not found"),
 			pass(CheckScopePressure, "SKILL.md not found"),
+			// Phase 2 checks.
+			pass(CheckDoctorOutputValid, "SKILL.md not found"),
+			pass(CheckHandoffSection, "SKILL.md not found"),
+			pass(CheckProvenanceDocumented, "SKILL.md not found"),
+			pass(CheckDeprecatedCommands, "SKILL.md not found"),
+			pass(CheckFailureModes, "SKILL.md not found"),
 			// Semantic quality checks.
 			pass(CheckTriggerActionable, "SKILL.md not found"),
 			pass(CheckToolReferencesValid, "SKILL.md not found"),
@@ -86,6 +92,12 @@ func Validate(path string) (*ValidationResult, error) {
 		checkNotDoNoOverlap(sf),
 		checkNotDoBoundaryVerbs(sf),
 		checkScopePressure(sf),
+		// Phase 2 checks.
+		checkDoctorOutputValid(sf),
+		checkHandoffSection(sf),
+		checkProvenanceDocumented(sf),
+		checkDeprecatedCommands(sf),
+		checkFailureModes(sf),
 		// Semantic quality checks.
 		checkJSONExamplesValid(sf),
 		checkExitCodesNumeric(sf),
@@ -138,6 +150,12 @@ func validateGitHubWithClient(client *gitHubClient, owner, repo string) (*Valida
 			pass(CheckNotDoNoOverlap, "SKILL.md not found"),
 			pass(CheckNotDoBoundaryVerbs, "SKILL.md not found"),
 			pass(CheckScopePressure, "SKILL.md not found"),
+			// Phase 2 checks.
+			pass(CheckDoctorOutputValid, "SKILL.md not found"),
+			pass(CheckHandoffSection, "SKILL.md not found"),
+			pass(CheckProvenanceDocumented, "SKILL.md not found"),
+			pass(CheckDeprecatedCommands, "SKILL.md not found"),
+			pass(CheckFailureModes, "SKILL.md not found"),
 			// Semantic quality checks.
 			pass(CheckTriggerActionable, "SKILL.md not found"),
 			pass(CheckToolReferencesValid, "SKILL.md not found"),
@@ -176,6 +194,12 @@ func validateGitHubWithClient(client *gitHubClient, owner, repo string) (*Valida
 		checkNotDoNoOverlap(sf),
 		checkNotDoBoundaryVerbs(sf),
 		checkScopePressure(sf),
+		// Phase 2 checks.
+		checkDoctorOutputValid(sf),
+		checkHandoffSection(sf),
+		checkProvenanceDocumented(sf),
+		checkDeprecatedCommands(sf),
+		checkFailureModes(sf),
 		// Semantic quality checks.
 		checkJSONExamplesValid(sf),
 		checkExitCodesNumeric(sf),

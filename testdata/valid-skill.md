@@ -63,6 +63,16 @@ Checks tool health and dependencies.
 **Flags:**
 - `--format json` — output as JSON
 
+**JSON output:**
+```json
+{
+  "status": "healthy",
+  "checks": [
+    {"name": "config", "status": "pass", "message": "configuration valid"}
+  ]
+}
+```
+
 **Exit codes:**
 - 0: all healthy
 - 1: issues found
@@ -72,6 +82,16 @@ Checks tool health and dependencies.
 - Does not modify system files or manage configurations
 - Does not store or persist any user data
 - Does not execute external commands or deploy artifacts
+
+## Handoffs
+
+- Output: structured JSON status. Next: diagnostic tool for root cause analysis.
+- Refused questions: why is it broken, should we fix it.
+
+## Failure Modes
+
+- Config file missing: returns exit code 1, empty output. Safe fallback: use defaults.
+- Network timeout: returns degraded status. Distrust: real-time fields.
 
 ## Parsing examples
 
