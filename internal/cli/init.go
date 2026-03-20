@@ -93,8 +93,9 @@ func generateTemplate(name string) string {
 	b.WriteString("Check environment health.\n\n")
 
 	b.WriteString("## What this does NOT do\n\n")
-	b.WriteString("- Does not do X\n")
-	b.WriteString("- Does not do Y\n\n")
+	b.WriteString("- Does not execute or install the target tool — validation only\n")
+	b.WriteString("- Does not modify source code or manage configurations\n")
+	b.WriteString("- Does not store or persist any user data\n\n")
 
 	b.WriteString("## Parsing examples\n\n")
 	b.WriteString("```bash\n")

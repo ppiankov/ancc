@@ -69,8 +69,9 @@ Checks tool health and dependencies.
 
 ## What this does NOT do
 
-- Does not modify system files
-- Does not require root access
+- Does not modify system files or manage configurations
+- Does not store or persist any user data
+- Does not execute external commands or deploy artifacts
 
 ## Parsing examples
 

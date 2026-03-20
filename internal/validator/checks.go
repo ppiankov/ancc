@@ -27,6 +27,13 @@ const (
 	CheckExitCodesNumeric       = "exit-codes-numeric"
 	CheckCommandsNotPlaceholder = "commands-not-placeholder"
 	CheckInstallHasCommand      = "install-has-command"
+	// Not-do quality checks.
+	CheckNotDoMinItems      = "not-do-min-items"
+	CheckNotDoSpecificity   = "not-do-specificity"
+	CheckNotDoNoOverlap     = "not-do-no-overlap"
+	CheckNotDoBoundaryVerbs = "not-do-boundary-verbs"
+	// Scope pressure check.
+	CheckScopePressure = "scope-pressure"
 	// Semantic quality checks.
 	CheckTriggerActionable    = "trigger-actionable"
 	CheckToolReferencesValid  = "tool-references-valid"
@@ -512,6 +519,149 @@ func checkSkillLineCount(path string) CheckResult {
 		return warn(CheckSkillLineCount, fmt.Sprintf("skill file has %d lines (consider splitting)", lines))
 	}
 	return pass(CheckSkillLineCount, fmt.Sprintf("skill file has %d lines", lines))
+}
+
+// --- Not-do quality checks ---
+
+// notDoBullets extracts bullet items from the not-do section.
+func notDoBullets(sf *skillmd.SkillFile) []string {
+	section := sf.Sections[skillmd.SectionWhatNotDo]
+	if section == nil {
+		return nil
+	}
+	var bullets []string
+	for _, line := range strings.Split(section.Content, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "- ") {
+			bullets = append(bullets, trimmed)
+		}
+	}
+	return bullets
+}
+
+// checkNotDoMinItems verifies the not-do section has at least 3 bullet points.
+func checkNotDoMinItems(sf *skillmd.SkillFile) CheckResult {
+	if sf.Sections[skillmd.SectionWhatNotDo] == nil {
+		return pass(CheckNotDoMinItems, "no not-do section (checked elsewhere)")
+	}
+	bullets := notDoBullets(sf)
+	if len(bullets) < 3 {
+		return fail(CheckNotDoMinItems, fmt.Sprintf("not-do section has %d items, need at least 3", len(bullets)))
+	}
+	return pass(CheckNotDoMinItems, fmt.Sprintf("not-do section has %d items", len(bullets)))
+}
+
+// vagueNotDoPhrases are patterns indicating vague not-do items.
+var vagueNotDoPhrases = []string{
+	"anything specific",
+	"everything else",
+	"other things",
+	"whatever",
+	"bad things",
+	"harm the system",
+	"not responsible",
+}
+
+// checkNotDoSpecificity warns on vague not-do items.
+func checkNotDoSpecificity(sf *skillmd.SkillFile) CheckResult {
+	bullets := notDoBullets(sf)
+	if len(bullets) == 0 {
+		return pass(CheckNotDoSpecificity, "no not-do items to check")
+	}
+	for _, bullet := range bullets {
+		lower := strings.ToLower(bullet)
+		for _, phrase := range vagueNotDoPhrases {
+			if strings.Contains(lower, phrase) {
+				return warn(CheckNotDoSpecificity, fmt.Sprintf("vague not-do item: %s", bullet))
+			}
+		}
+	}
+	return pass(CheckNotDoSpecificity, "not-do items are specific")
+}
+
+// checkNotDoNoOverlap warns if not-do items directly contradict documented commands.
+// Only flags when a not-do item says "does not <subcmd>" as a standalone verb,
+// not when the subcmd word appears as part of a longer phrase.
+func checkNotDoNoOverlap(sf *skillmd.SkillFile) CheckResult {
+	bullets := notDoBullets(sf)
+	if len(bullets) == 0 {
+		return pass(CheckNotDoNoOverlap, "no not-do items to check")
+	}
+	for _, cmd := range sf.Commands {
+		parts := strings.Fields(cmd.Name)
+		if len(parts) == 0 {
+			continue
+		}
+		subCmd := strings.ToLower(parts[len(parts)-1])
+		if len(subCmd) < 3 {
+			continue
+		}
+		for _, bullet := range bullets {
+			lower := strings.ToLower(bullet)
+			// Check for "does not <subcmd>" followed by end-of-string or non-alpha.
+			// This avoids false positives like "does not validate code quality"
+			// matching command "validate" — only flags direct contradictions like
+			// "does not deploy" when "deploy" is a command.
+			for _, prefix := range []string{"does not " + subCmd, "not " + subCmd} {
+				idx := strings.Index(lower, prefix)
+				if idx < 0 {
+					continue
+				}
+				afterIdx := idx + len(prefix)
+				if afterIdx >= len(lower) {
+					// Exact match at end of string — direct contradiction.
+					return warn(CheckNotDoNoOverlap,
+						fmt.Sprintf("not-do item contradicts command %q: %s", cmd.Name, bullet))
+				}
+				// Only flag if subcmd is at end of meaningful phrase (punctuation or EOL).
+				// "does not deploy" or "does not deploy." = contradiction.
+				// "does not validate code quality" = subcmd used as verb, not contradiction.
+				next := lower[afterIdx]
+				if next == ',' || next == '.' || next == ';' || next == ':' || next == '\n' {
+					return warn(CheckNotDoNoOverlap,
+						fmt.Sprintf("not-do item contradicts command %q: %s", cmd.Name, bullet))
+				}
+			}
+		}
+	}
+	return pass(CheckNotDoNoOverlap, "no overlap between not-do items and commands")
+}
+
+// boundaryVerbs are verbs that define clear scope boundaries.
+var boundaryVerbs = []string{
+	"manage", "store", "execute", "replace", "modify", "own",
+	"install", "deploy", "access", "control", "authenticate",
+	"persist", "cache", "monitor", "orchestrate",
+}
+
+// checkNotDoBoundaryVerbs warns if not-do items lack boundary-defining verbs.
+func checkNotDoBoundaryVerbs(sf *skillmd.SkillFile) CheckResult {
+	bullets := notDoBullets(sf)
+	if len(bullets) == 0 {
+		return pass(CheckNotDoBoundaryVerbs, "no not-do items to check")
+	}
+	for _, bullet := range bullets {
+		lower := strings.ToLower(bullet)
+		for _, verb := range boundaryVerbs {
+			if strings.Contains(lower, verb) {
+				return pass(CheckNotDoBoundaryVerbs, "not-do items use boundary-defining verbs")
+			}
+		}
+	}
+	return warn(CheckNotDoBoundaryVerbs, "not-do items lack boundary verbs (manage/store/execute/replace/modify/own)")
+}
+
+// checkScopePressure warns when a SKILL.md has many commands or sections.
+func checkScopePressure(sf *skillmd.SkillFile) CheckResult {
+	if len(sf.Commands) > 10 {
+		return warn(CheckScopePressure,
+			fmt.Sprintf("tool has %d commands; consider splitting into focused tools", len(sf.Commands)))
+	}
+	if len(sf.Sections) > 8 {
+		return warn(CheckScopePressure,
+			fmt.Sprintf("skill file has %d sections; consider splitting", len(sf.Sections)))
+	}
+	return pass(CheckScopePressure, fmt.Sprintf("%d commands, %d sections", len(sf.Commands), len(sf.Sections)))
 }
 
 // checkDuplicateSkillNames warns on duplicate skill names across agent configs.

@@ -45,6 +45,12 @@ func Validate(path string) (*ValidationResult, error) {
 			pass(CheckExitCodesNumeric, "SKILL.md not found"),
 			pass(CheckCommandsNotPlaceholder, "SKILL.md not found"),
 			pass(CheckInstallHasCommand, "SKILL.md not found"),
+			// Not-do quality checks.
+			fail(CheckNotDoMinItems, "SKILL.md not found"),
+			pass(CheckNotDoSpecificity, "SKILL.md not found"),
+			pass(CheckNotDoNoOverlap, "SKILL.md not found"),
+			pass(CheckNotDoBoundaryVerbs, "SKILL.md not found"),
+			pass(CheckScopePressure, "SKILL.md not found"),
 			// Semantic quality checks.
 			pass(CheckTriggerActionable, "SKILL.md not found"),
 			pass(CheckToolReferencesValid, "SKILL.md not found"),
@@ -74,6 +80,12 @@ func Validate(path string) (*ValidationResult, error) {
 		checkInitCommand(sf),
 		checkDoctorCommand(sf),
 		checkBinaryRelease(""),
+		// Not-do quality checks.
+		checkNotDoMinItems(sf),
+		checkNotDoSpecificity(sf),
+		checkNotDoNoOverlap(sf),
+		checkNotDoBoundaryVerbs(sf),
+		checkScopePressure(sf),
 		// Semantic quality checks.
 		checkJSONExamplesValid(sf),
 		checkExitCodesNumeric(sf),
@@ -120,6 +132,12 @@ func validateGitHubWithClient(client *gitHubClient, owner, repo string) (*Valida
 			pass(CheckExitCodesNumeric, "SKILL.md not found"),
 			pass(CheckCommandsNotPlaceholder, "SKILL.md not found"),
 			pass(CheckInstallHasCommand, "SKILL.md not found"),
+			// Not-do quality checks.
+			fail(CheckNotDoMinItems, "SKILL.md not found"),
+			pass(CheckNotDoSpecificity, "SKILL.md not found"),
+			pass(CheckNotDoNoOverlap, "SKILL.md not found"),
+			pass(CheckNotDoBoundaryVerbs, "SKILL.md not found"),
+			pass(CheckScopePressure, "SKILL.md not found"),
 			// Semantic quality checks.
 			pass(CheckTriggerActionable, "SKILL.md not found"),
 			pass(CheckToolReferencesValid, "SKILL.md not found"),
@@ -152,6 +170,12 @@ func validateGitHubWithClient(client *gitHubClient, owner, repo string) (*Valida
 		checkInitCommand(sf),
 		checkDoctorCommand(sf),
 		checkBinaryReleaseGitHub(client, owner, repo),
+		// Not-do quality checks.
+		checkNotDoMinItems(sf),
+		checkNotDoSpecificity(sf),
+		checkNotDoNoOverlap(sf),
+		checkNotDoBoundaryVerbs(sf),
+		checkScopePressure(sf),
 		// Semantic quality checks.
 		checkJSONExamplesValid(sf),
 		checkExitCodesNumeric(sf),

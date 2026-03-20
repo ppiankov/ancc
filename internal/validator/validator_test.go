@@ -247,7 +247,7 @@ func TestValidate_ValidFixture(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if result.Summary.Total != 20 {
+	if result.Summary.Total != 25 {
 		t.Errorf("total = %d, want 20", result.Summary.Total)
 	}
 	if result.Summary.Fail != 0 {
@@ -272,7 +272,7 @@ func TestValidate_MissingSkillMD(t *testing.T) {
 	if result.Status != OverallFail {
 		t.Errorf("status = %q, want %q", result.Status, OverallFail)
 	}
-	if result.Summary.Total != 20 {
+	if result.Summary.Total != 25 {
 		t.Errorf("total = %d, want 20", result.Summary.Total)
 	}
 }
@@ -319,7 +319,7 @@ func TestValidate_DocsSubdir(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if result.Summary.Total != 20 {
+	if result.Summary.Total != 25 {
 		t.Errorf("total = %d, want 20", result.Summary.Total)
 	}
 	if result.Summary.Fail != 0 {
@@ -742,8 +742,8 @@ func TestValidate_WithSemanticChecks(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	// Should have 20 checks now (15 original + 5 semantic).
-	if result.Summary.Total != 20 {
+	// Should have 25 checks now (15 original + 5 semantic + 5 scope/quality).
+	if result.Summary.Total != 25 {
 		t.Errorf("total = %d, want 20", result.Summary.Total)
 	}
 }
