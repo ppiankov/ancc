@@ -21,6 +21,7 @@ func newRootCmd(version string) *cobra.Command {
 	cmd.AddCommand(newContextCmd())
 	cmd.AddCommand(newDiffCmd())
 	cmd.AddCommand(newExportCmd())
+	cmd.AddCommand(newScaffoldCmd())
 
 	return cmd
 }
