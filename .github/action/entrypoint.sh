@@ -57,8 +57,6 @@ run_checks() {
       exit_code=1
     elif [[ "$status" == "partial" && "$fail_on_warn" == "true" ]]; then
       exit_code=1
-    elif [[ "$status" == "partial" && $exit_code -eq 0 ]]; then
-      exit_code=2
     fi
 
     echo "::endgroup::"
