@@ -28,6 +28,8 @@ runs:
   steps:
     - name: Install ancc
       shell: bash
+      env:
+        GITHUB_TOKEN: ${{ github.token }}
       run: ${{ github.action_path }}/entrypoint.sh install "${{ inputs.version }}"
 
     - name: Run checks

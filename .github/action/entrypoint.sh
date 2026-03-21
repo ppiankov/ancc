@@ -16,7 +16,11 @@ install_ancc() {
   esac
 
   if [[ "$version" == "latest" ]]; then
-    version="$(curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest" | grep '"tag_name"' | sed -E 's/.*"v?([^"]+)".*/\1/')"
+    local curl_args=(-fsSL)
+    if [[ -n "${GITHUB_TOKEN:-}" ]]; then
+      curl_args+=(-H "Authorization: token ${GITHUB_TOKEN}")
+    fi
+    version="$(curl "${curl_args[@]}" "https://api.github.com/repos/${REPO}/releases/latest" | grep '"tag_name"' | sed -E 's/.*"v?([^"]+)".*/\1/')"
   fi
   version="${version#v}"
 
