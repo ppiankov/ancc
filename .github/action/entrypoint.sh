@@ -20,7 +20,7 @@ install_ancc() {
   fi
   version="${version#v}"
 
-  local url="https://github.com/${REPO}/releases/download/v${version}/ancc_${version}_${os}_${arch}.tar.gz"
+  local url="https://github.com/${REPO}/releases/download/v${version}/ancc-${version}-${os}-${arch}.tar.gz"
   echo "Installing ancc v${version} from ${url}"
 
   local tmpdir
