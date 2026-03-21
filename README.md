@@ -9,15 +9,15 @@ Static validator for the [Agent-Native CLI Convention](https://ancc.dev).
 
 ## Project Status
 
-**Status: Beta** · **v0.5.0** · Pre-1.0
+**Status: Beta** · **v0.7.0** · Pre-1.0
 
 | Milestone | Status |
 |-----------|--------|
-| SKILL.md parser + validation (15 checks) | Complete |
+| SKILL.md parser + validation (30 checks) | Complete |
 | CLI with human + JSON output | Complete |
 | GitHub repo support + batch scan | Complete |
 | Homebrew distribution | Complete |
-| Skills scanner (11 agents) | Complete |
+| Skills scanner (14 agents) | Complete |
 | Init, doctor commands | Complete |
 | Token counting + budget visualization | Complete |
 | Audit (hooks, MCP, skills, environment) | Complete |
@@ -132,13 +132,21 @@ See [`docs/SKILL.md`](docs/SKILL.md) for full config paths per agent.
 
 ## CI Integration
 
-Use the bundled GitHub Action to validate on PRs:
+Add ANCC validation to any repo with one workflow file:
 
 ```yaml
-- uses: ppiankov/ancc@main
-  with:
-    checks: validate
-    fail-on-warn: false
+# .github/workflows/ancc.yml
+name: ANCC
+on: [push, pull_request]
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ppiankov/ancc/.github/action@v0.7.0
+        with:
+          checks: validate
+          fail-on-warn: false
 ```
 
 Or generate a badge: `ancc validate . --badge`
