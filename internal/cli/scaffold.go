@@ -101,6 +101,8 @@ func generateProject(name, toolType string) map[string]string {
 	files["README.md"] = scaffoldReadme(name)
 	files[filepath.Join(".github", "workflows", "ci.yml")] = scaffoldCI(name)
 	files[filepath.Join(".github", "workflows", "ancc.yml")] = scaffoldANCCWorkflow()
+	files[filepath.Join(".github", "workflows", "release.yml")] = scaffoldReleaseWorkflow(name)
+	files["CHANGELOG.md"] = scaffoldChangelog(name)
 
 	switch toolType {
 	case scaffoldTypeScanner:
@@ -399,7 +401,7 @@ func TestCheckResult_JSON(t *testing.T) {
 }
 
 func scaffoldMakefile(name string) string {
-	return fmt.Sprintf(`.PHONY: build test lint fmt clean
+	return fmt.Sprintf(`.PHONY: build test lint fmt clean release
 
 build:
 	go build -o bin/%s ./cmd/%s
@@ -416,7 +418,13 @@ fmt:
 
 clean:
 	rm -rf bin/
-`, name, name)
+
+release: ## Tag and push (requires CHANGELOG entry)
+	@VERSION=$$(grep 'var version' cmd/%s/main.go | cut -d'"' -f2) && \
+	grep -q "## \[$$VERSION\]" CHANGELOG.md || { echo "ERROR: Add CHANGELOG entry for $$VERSION first"; exit 1; } && \
+	git tag v$$VERSION && git push origin main v$$VERSION && \
+	echo "Tagged and pushed v$$VERSION"
+`, name, name, name)
 }
 
 func scaffoldGitignore(name string) string {
@@ -580,6 +588,75 @@ Initialize configuration with sensible defaults.
 
 This tool follows the [Agent-Native CLI Convention](https://ancc.dev). Validate with: `+"`ancc validate .`"+`
 `, name, name, name, name, name, name, name, name, name, name)
+}
+
+func scaffoldChangelog(name string) string {
+	return fmt.Sprintf(`# Changelog
+
+## [Unreleased]
+
+## [0.1.0] - %s
+
+### Added
+
+- Initial release of %s
+- ANCC-compliant project structure
+`, "YYYY-MM-DD", name)
+}
+
+func scaffoldReleaseWorkflow(name string) string {
+	return fmt.Sprintf(`name: Release
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Verify CHANGELOG entry exists
+        run: |
+          VERSION="${GITHUB_REF#refs/tags/v}"
+          if ! grep -q "## \[${VERSION}\]" CHANGELOG.md; then
+            echo "ERROR: No CHANGELOG.md entry for version ${VERSION}"
+            echo "Add '## [${VERSION}] - YYYY-MM-DD' to CHANGELOG.md before tagging."
+            exit 1
+          fi
+          echo "CHANGELOG entry found for ${VERSION}"
+
+      - name: Generate release notes from CHANGELOG
+        run: |
+          VERSION="${GITHUB_REF#refs/tags/v}"
+          awk "/^## \[${VERSION}\]/{found=1; next} /^## \[/{if(found) exit} found{print}" CHANGELOG.md > /tmp/release-notes.md
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          if [ -n "$PREV_TAG" ]; then
+            echo "" >> /tmp/release-notes.md
+            echo "**Full Changelog**: https://github.com/${{ github.repository }}/compare/${PREV_TAG}...v${VERSION}" >> /tmp/release-notes.md
+          fi
+
+      - name: Build
+        run: make build
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          body_path: /tmp/release-notes.md
+          files: bin/%s
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+`, name)
 }
 
 func scaffoldDiagnosticSkillMD(name string) string {
