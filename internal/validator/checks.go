@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/ppiankov/ancc/internal/skillmd"
@@ -46,6 +48,9 @@ const (
 	CheckInstructionsSpecific = "instructions-specific"
 	CheckSkillLineCount       = "skill-line-count"
 	CheckDuplicateSkillNames  = "duplicate-skill-names"
+	// Temporal contract checks.
+	CheckChangelogExists       = "changelog-exists"
+	CheckChangelogVersionEntry = "changelog-version-entry"
 )
 
 func pass(name, msg string) CheckResult {
@@ -840,4 +845,82 @@ func checkDuplicateSkillNames(repoPath string) CheckResult {
 		return warn(CheckDuplicateSkillNames, fmt.Sprintf("duplicate skill names: %v", skillNames))
 	}
 	return pass(CheckDuplicateSkillNames, "no duplicate skill names found")
+}
+
+// --- Temporal contract checks ---
+
+// changelogVersionPattern matches ## [x.y.z] headers in CHANGELOG.md.
+var changelogVersionPattern = regexp.MustCompile(`^##\s+\[(\d+\.\d+\.\d+)\]`)
+
+// checkChangelogExists verifies CHANGELOG.md exists at repo root.
+func checkChangelogExists(repoPath string) CheckResult {
+	p := filepath.Join(repoPath, "CHANGELOG.md")
+	if _, err := os.Stat(p); err == nil {
+		return pass(CheckChangelogExists, "CHANGELOG.md found")
+	}
+	return warn(CheckChangelogExists, "CHANGELOG.md not found at repo root")
+}
+
+// checkChangelogVersionEntry verifies the latest git tag has a matching CHANGELOG entry.
+// Returns pass if no tags exist or if the repo is not a git repo.
+func checkChangelogVersionEntry(repoPath string) CheckResult {
+	changelogPath := filepath.Join(repoPath, "CHANGELOG.md")
+	data, err := os.ReadFile(changelogPath)
+	if err != nil {
+		return pass(CheckChangelogVersionEntry, "no CHANGELOG.md to check")
+	}
+
+	// Parse version entries from CHANGELOG.
+	var versions []string
+	for _, line := range strings.Split(string(data), "\n") {
+		if m := changelogVersionPattern.FindStringSubmatch(line); len(m) > 1 {
+			versions = append(versions, m[1])
+		}
+	}
+
+	if len(versions) == 0 {
+		return fail(CheckChangelogVersionEntry, "CHANGELOG.md has no version entries (expected ## [x.y.z] headers)")
+	}
+
+	// Try to read latest git tag for cross-reference.
+	latestTag := gitLatestTag(repoPath)
+	if latestTag == "" {
+		return pass(CheckChangelogVersionEntry, fmt.Sprintf("%d version(s) in CHANGELOG (no git tags to cross-reference)", len(versions)))
+	}
+
+	// Strip v prefix from tag.
+	tagVersion := strings.TrimPrefix(latestTag, "v")
+
+	// Check if the tag version exists in CHANGELOG.
+	for _, v := range versions {
+		if v == tagVersion {
+			return pass(CheckChangelogVersionEntry, fmt.Sprintf("CHANGELOG entry found for %s", latestTag))
+		}
+	}
+	return fail(CheckChangelogVersionEntry, fmt.Sprintf("no CHANGELOG entry for latest tag %s", latestTag))
+}
+
+// gitLatestTag returns the latest semver tag, or "" if none found.
+func gitLatestTag(repoPath string) string {
+	// Check if .git exists.
+	if _, err := os.Stat(filepath.Join(repoPath, ".git")); err != nil {
+		return ""
+	}
+	// Use git describe to find latest tag.
+	out, err := execGit(repoPath, "describe", "--tags", "--abbrev=0")
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(out)
+}
+
+// execGit runs a git command in the given directory.
+func execGit(dir string, args ...string) (string, error) {
+	cmd := exec.Command("git", args...)
+	cmd.Dir = dir
+	out, err := cmd.Output()
+	if err != nil {
+		return "", err
+	}
+	return string(out), nil
 }

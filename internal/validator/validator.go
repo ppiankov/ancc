@@ -63,6 +63,9 @@ func Validate(path string) (*ValidationResult, error) {
 			pass(CheckInstructionsSpecific, "SKILL.md not found"),
 			pass(CheckSkillLineCount, "SKILL.md not found"),
 			pass(CheckDuplicateSkillNames, "SKILL.md not found"),
+			// Temporal contract checks (run even without SKILL.md).
+			checkChangelogExists(path),
+			checkChangelogVersionEntry(path),
 		)
 		computeSummary(result)
 		return result, nil
@@ -108,6 +111,9 @@ func Validate(path string) (*ValidationResult, error) {
 		checkInstructionsSpecific(sf),
 		checkSkillLineCount(skillPath),
 		checkDuplicateSkillNames(path),
+		// Temporal contract checks.
+		checkChangelogExists(path),
+		checkChangelogVersionEntry(path),
 	)
 
 	computeSummary(result)
@@ -162,6 +168,8 @@ func validateGitHubWithClient(client *gitHubClient, owner, repo string) (*Valida
 			pass(CheckInstructionsSpecific, "SKILL.md not found"),
 			pass(CheckSkillLineCount, "SKILL.md not found"),
 			pass(CheckDuplicateSkillNames, "SKILL.md not found"),
+			pass(CheckChangelogExists, "GitHub validation cannot check CHANGELOG"),
+			pass(CheckChangelogVersionEntry, "GitHub validation cannot check CHANGELOG"),
 		)
 		// Still check binary releases.
 		result.Checks = append(result.Checks, checkBinaryReleaseGitHub(client, owner, repo))
@@ -208,9 +216,11 @@ func validateGitHubWithClient(client *gitHubClient, owner, repo string) (*Valida
 		checkTriggerActionable(sf),
 		checkToolReferencesValid(sf),
 		checkInstructionsSpecific(sf),
-		// Note: line count and duplicate checks require filesystem access.
+		// Note: line count, duplicate, and temporal checks require filesystem access.
 		pass(CheckSkillLineCount, "GitHub validation cannot check line count"),
 		pass(CheckDuplicateSkillNames, "GitHub validation cannot check duplicates"),
+		pass(CheckChangelogExists, "GitHub validation cannot check CHANGELOG"),
+		pass(CheckChangelogVersionEntry, "GitHub validation cannot check CHANGELOG"),
 	)
 
 	computeSummary(result)

@@ -247,15 +247,15 @@ func TestValidate_ValidFixture(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if result.Summary.Total != 30 {
+	if result.Summary.Total != 32 {
 		t.Errorf("total = %d, want 20", result.Summary.Total)
 	}
 	if result.Summary.Fail != 0 {
 		t.Errorf("fail = %d, want 0", result.Summary.Fail)
 	}
-	// binary-release is the only warn for valid fixture (semantic checks pass).
-	if result.Summary.Warn != 1 {
-		t.Errorf("warn = %d, want 1 (binary-release skipped)", result.Summary.Warn)
+	// binary-release + changelog-exists warn for valid fixture in temp dir.
+	if result.Summary.Warn != 2 {
+		t.Errorf("warn = %d, want 2 (binary-release skipped + changelog-exists)", result.Summary.Warn)
 	}
 	if result.Status != OverallPartial {
 		t.Errorf("status = %q, want %q", result.Status, OverallPartial)
@@ -272,7 +272,7 @@ func TestValidate_MissingSkillMD(t *testing.T) {
 	if result.Status != OverallFail {
 		t.Errorf("status = %q, want %q", result.Status, OverallFail)
 	}
-	if result.Summary.Total != 30 {
+	if result.Summary.Total != 32 {
 		t.Errorf("total = %d, want 20", result.Summary.Total)
 	}
 }
@@ -319,7 +319,7 @@ func TestValidate_DocsSubdir(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if result.Summary.Total != 30 {
+	if result.Summary.Total != 32 {
 		t.Errorf("total = %d, want 20", result.Summary.Total)
 	}
 	if result.Summary.Fail != 0 {
@@ -726,6 +726,60 @@ func TestCheckDuplicateSkillNames_NoPath(t *testing.T) {
 	}
 }
 
+// --- Temporal contract check tests ---
+
+func TestCheckChangelogExists_Present(t *testing.T) {
+	dir := t.TempDir()
+	if err := writeFile(filepath.Join(dir, "CHANGELOG.md"), []byte("# Changelog\n\n## [1.0.0]\n")); err != nil {
+		t.Fatal(err)
+	}
+	r := checkChangelogExists(dir)
+	if r.Status != StatusPass {
+		t.Errorf("status = %q, want %q; message: %s", r.Status, StatusPass, r.Message)
+	}
+}
+
+func TestCheckChangelogExists_Missing(t *testing.T) {
+	r := checkChangelogExists(t.TempDir())
+	if r.Status != StatusWarn {
+		t.Errorf("status = %q, want %q; message: %s", r.Status, StatusWarn, r.Message)
+	}
+}
+
+func TestCheckChangelogVersionEntry_HasVersions(t *testing.T) {
+	dir := t.TempDir()
+	content := "# Changelog\n\n## [1.2.0] - 2026-03-25\n\n### Added\n\n- Feature\n\n## [1.1.0] - 2026-03-20\n\n### Fixed\n\n- Bug\n"
+	if err := writeFile(filepath.Join(dir, "CHANGELOG.md"), []byte(content)); err != nil {
+		t.Fatal(err)
+	}
+	r := checkChangelogVersionEntry(dir)
+	if r.Status != StatusPass {
+		t.Errorf("status = %q, want %q; message: %s", r.Status, StatusPass, r.Message)
+	}
+	if !strings.Contains(r.Message, "2 version(s)") {
+		t.Errorf("message = %q, want to contain version count", r.Message)
+	}
+}
+
+func TestCheckChangelogVersionEntry_NoVersionHeaders(t *testing.T) {
+	dir := t.TempDir()
+	content := "# Changelog\n\nSome text but no version headers.\n"
+	if err := writeFile(filepath.Join(dir, "CHANGELOG.md"), []byte(content)); err != nil {
+		t.Fatal(err)
+	}
+	r := checkChangelogVersionEntry(dir)
+	if r.Status != StatusFail {
+		t.Errorf("status = %q, want %q; message: %s", r.Status, StatusFail, r.Message)
+	}
+}
+
+func TestCheckChangelogVersionEntry_NoChangelog(t *testing.T) {
+	r := checkChangelogVersionEntry(t.TempDir())
+	if r.Status != StatusPass {
+		t.Errorf("status = %q, want %q (no CHANGELOG to check)", r.Status, StatusPass)
+	}
+}
+
 func TestValidate_WithSemanticChecks(t *testing.T) {
 	// Create a temp dir with a valid SKILL.md.
 	dir := t.TempDir()
@@ -743,7 +797,7 @@ func TestValidate_WithSemanticChecks(t *testing.T) {
 	}
 
 	// Should have 30 checks now (15 original + 5 semantic + 5 scope + 5 spec).
-	if result.Summary.Total != 30 {
+	if result.Summary.Total != 32 {
 		t.Errorf("total = %d, want 20", result.Summary.Total)
 	}
 }

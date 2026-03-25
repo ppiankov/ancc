@@ -300,8 +300,8 @@ demotool run --format json | jq '.'
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if result.Summary.Total != 30 {
-		t.Errorf("total = %d, want 20", result.Summary.Total)
+	if result.Summary.Total != 32 {
+		t.Errorf("total = %d, want 32", result.Summary.Total)
 	}
 	if result.Summary.Fail != 0 {
 		t.Errorf("fail = %d, want 0", result.Summary.Fail)
@@ -329,7 +329,7 @@ func TestValidateGitHubWithClient_NoSkillMD(t *testing.T) {
 	if result.Status != OverallFail {
 		t.Errorf("status = %q, want %q", result.Status, OverallFail)
 	}
-	if result.Summary.Total != 30 {
-		t.Errorf("total = %d, want 20", result.Summary.Total)
+	if result.Summary.Total != 32 {
+		t.Errorf("total = %d, want 32", result.Summary.Total)
 	}
 }
