@@ -192,8 +192,12 @@ Checks ancc's own health and reports companion tools.
 ```json
 {
   "status": "ok | warn | error",
+  "version": "0.7.1",
+  "source": {
+    "repo": "github.com/ppiankov/ancc"
+  },
   "checks": [
-    {"name": "ancc-version", "status": "ok", "message": "0.2.0"},
+    {"name": "ancc-version", "status": "ok", "message": "0.7.1"},
     {"name": "go-available", "status": "ok", "message": "go version go1.24.0 darwin/arm64"},
     {"name": "github-api", "status": "warn", "message": "GITHUB_TOKEN not set"},
     {"name": "homebrew", "status": "ok", "message": "brew found"}

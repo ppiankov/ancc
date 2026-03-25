@@ -247,15 +247,15 @@ func TestValidate_ValidFixture(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if result.Summary.Total != 32 {
+	if result.Summary.Total != 33 {
 		t.Errorf("total = %d, want 20", result.Summary.Total)
 	}
 	if result.Summary.Fail != 0 {
 		t.Errorf("fail = %d, want 0", result.Summary.Fail)
 	}
-	// binary-release + changelog-exists warn for valid fixture in temp dir.
-	if result.Summary.Warn != 2 {
-		t.Errorf("warn = %d, want 2 (binary-release skipped + changelog-exists)", result.Summary.Warn)
+	// binary-release + changelog-exists + doctor-provenance warn for valid fixture in temp dir.
+	if result.Summary.Warn != 3 {
+		t.Errorf("warn = %d, want 3 (binary-release + changelog-exists + doctor-provenance)", result.Summary.Warn)
 	}
 	if result.Status != OverallPartial {
 		t.Errorf("status = %q, want %q", result.Status, OverallPartial)
@@ -272,7 +272,7 @@ func TestValidate_MissingSkillMD(t *testing.T) {
 	if result.Status != OverallFail {
 		t.Errorf("status = %q, want %q", result.Status, OverallFail)
 	}
-	if result.Summary.Total != 32 {
+	if result.Summary.Total != 33 {
 		t.Errorf("total = %d, want 20", result.Summary.Total)
 	}
 }
@@ -319,7 +319,7 @@ func TestValidate_DocsSubdir(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if result.Summary.Total != 32 {
+	if result.Summary.Total != 33 {
 		t.Errorf("total = %d, want 20", result.Summary.Total)
 	}
 	if result.Summary.Fail != 0 {
@@ -797,7 +797,7 @@ func TestValidate_WithSemanticChecks(t *testing.T) {
 	}
 
 	// Should have 30 checks now (15 original + 5 semantic + 5 scope + 5 spec).
-	if result.Summary.Total != 32 {
+	if result.Summary.Total != 33 {
 		t.Errorf("total = %d, want 20", result.Summary.Total)
 	}
 }

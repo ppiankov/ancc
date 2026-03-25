@@ -63,6 +63,8 @@ func Validate(path string) (*ValidationResult, error) {
 			pass(CheckInstructionsSpecific, "SKILL.md not found"),
 			pass(CheckSkillLineCount, "SKILL.md not found"),
 			pass(CheckDuplicateSkillNames, "SKILL.md not found"),
+			// Doctor provenance (needs SKILL.md).
+			pass(CheckDoctorProvenance, "SKILL.md not found"),
 			// Temporal contract checks (run even without SKILL.md).
 			checkChangelogExists(path),
 			checkChangelogVersionEntry(path),
@@ -111,6 +113,8 @@ func Validate(path string) (*ValidationResult, error) {
 		checkInstructionsSpecific(sf),
 		checkSkillLineCount(skillPath),
 		checkDuplicateSkillNames(path),
+		// Doctor provenance.
+		checkDoctorProvenance(sf),
 		// Temporal contract checks.
 		checkChangelogExists(path),
 		checkChangelogVersionEntry(path),
@@ -168,6 +172,7 @@ func validateGitHubWithClient(client *gitHubClient, owner, repo string) (*Valida
 			pass(CheckInstructionsSpecific, "SKILL.md not found"),
 			pass(CheckSkillLineCount, "SKILL.md not found"),
 			pass(CheckDuplicateSkillNames, "SKILL.md not found"),
+			pass(CheckDoctorProvenance, "SKILL.md not found"),
 			pass(CheckChangelogExists, "GitHub validation cannot check CHANGELOG"),
 			pass(CheckChangelogVersionEntry, "GitHub validation cannot check CHANGELOG"),
 		)
@@ -219,6 +224,7 @@ func validateGitHubWithClient(client *gitHubClient, owner, repo string) (*Valida
 		// Note: line count, duplicate, and temporal checks require filesystem access.
 		pass(CheckSkillLineCount, "GitHub validation cannot check line count"),
 		pass(CheckDuplicateSkillNames, "GitHub validation cannot check duplicates"),
+		checkDoctorProvenance(sf),
 		pass(CheckChangelogExists, "GitHub validation cannot check CHANGELOG"),
 		pass(CheckChangelogVersionEntry, "GitHub validation cannot check CHANGELOG"),
 	)

@@ -51,6 +51,8 @@ const (
 	// Temporal contract checks.
 	CheckChangelogExists       = "changelog-exists"
 	CheckChangelogVersionEntry = "changelog-version-entry"
+	// Doctor provenance check.
+	CheckDoctorProvenance = "doctor-provenance"
 )
 
 func pass(name, msg string) CheckResult {
@@ -923,4 +925,30 @@ func execGit(dir string, args ...string) (string, error) {
 		return "", err
 	}
 	return string(out), nil
+}
+
+// --- Doctor provenance check ---
+
+// checkDoctorProvenance verifies that doctor JSON output includes provenance fields.
+func checkDoctorProvenance(sf *skillmd.SkillFile) CheckResult {
+	for _, cmd := range sf.Commands {
+		if !strings.HasSuffix(cmd.Name, " doctor") && cmd.Name != "doctor" {
+			continue
+		}
+		if cmd.JSONOutput == "" {
+			return pass(CheckDoctorProvenance, "doctor command has no JSON example (optional)")
+		}
+		var doc map[string]interface{}
+		if err := json.Unmarshal([]byte(cmd.JSONOutput), &doc); err != nil {
+			return pass(CheckDoctorProvenance, "doctor JSON not parseable (checked elsewhere)")
+		}
+		if _, ok := doc["version"]; !ok {
+			return warn(CheckDoctorProvenance, "doctor output missing 'version' field (required for binary provenance)")
+		}
+		if _, ok := doc["source"]; !ok {
+			return warn(CheckDoctorProvenance, "doctor output missing 'source' field (recommended: {repo: \"...\"})")
+		}
+		return pass(CheckDoctorProvenance, "doctor output includes provenance fields")
+	}
+	return pass(CheckDoctorProvenance, "no doctor command (checked elsewhere)")
 }

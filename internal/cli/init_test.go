@@ -155,9 +155,9 @@ func TestInitCmd_ValidatesClean(t *testing.T) {
 		t.Fatalf("generated template has %d failures", result.Summary.Fail)
 	}
 
-	// Expect 29 pass + 3 warn (binary-release + failure-modes + changelog-exists).
-	if result.Summary.Pass != 29 {
-		t.Errorf("pass = %d, want 29", result.Summary.Pass)
+	// Expect 30 pass + 3 warn (binary-release + failure-modes + changelog-exists).
+	if result.Summary.Pass != 30 {
+		t.Errorf("pass = %d, want 30", result.Summary.Pass)
 	}
 	if result.Summary.Warn != 3 {
 		t.Errorf("warn = %d, want 3 (binary-release + failure-modes + changelog-exists)", result.Summary.Warn)
