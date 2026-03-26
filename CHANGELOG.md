@@ -2,6 +2,18 @@
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-03-26
+
+### Added
+
+- `changelog-exists` validator check (warn) — CHANGELOG.md must exist at repo root
+- `changelog-version-entry` validator check (fail) — latest git tag must have matching entry
+- `doctor-provenance` validator check (warn) — doctor output should include version and source.repo
+- Scaffold generates CHANGELOG.md template with initial version entry
+- Scaffold generates `.github/workflows/release.yml` with CHANGELOG verification gate
+- Scaffold Makefile includes `release` target that refuses to tag without CHANGELOG entry
+- Total checks: 30 → 33
+
 ## [0.7.1] - 2026-03-22
 
 ### Added
