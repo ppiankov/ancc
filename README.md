@@ -17,7 +17,7 @@ Static validator for the [Agent-Native CLI Convention](https://ancc.dev).
 | CLI with human + JSON output | Complete |
 | GitHub repo support + batch scan | Complete |
 | Homebrew distribution | Complete |
-| Skills scanner (14 agents) | Complete |
+| Skills scanner (15 agents) | Complete |
 | Init, doctor commands | Complete |
 | Token counting + budget visualization | Complete |
 | Audit (hooks, MCP, skills, environment) | Complete |
@@ -126,7 +126,9 @@ internal/
 
 ## Supported Agents
 
-ancc detects 11 agents: claude-code, cline, cursor, opencode, codex, qwen, openclaw, windsurf, aider, continue, copilot.
+ancc detects 15 agents: claude-code, cline, cursor, opencode, codex, qwen, openclaw, windsurf, aider, continue, copilot, kilocode, vibe, goose, antigravity.
+
+Antigravity detection is advisory while agy CLI customization paths continue to settle.
 
 See [`docs/SKILL.md`](docs/SKILL.md) for full config paths per agent.
 

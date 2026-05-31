@@ -42,6 +42,7 @@ func ScanWithHome(projectDir, homeDir string) (*ScanResult, error) {
 		scanKilocode,
 		scanVibe,
 		scanGoose,
+		scanAntigravity, // WO-66: include agy in aggregate scans
 	}
 
 	for _, scan := range scanners {

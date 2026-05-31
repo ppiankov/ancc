@@ -5,38 +5,40 @@ type AgentName = string
 
 // Agent name constants.
 const (
-	AgentClaudeCode = "claude-code"
-	AgentCline      = "cline"
-	AgentCursor     = "cursor"
-	AgentOpenCode   = "opencode"
-	AgentCodex      = "codex"
-	AgentQwen       = "qwen"
-	AgentOpenClaw   = "openclaw"
-	AgentWindsurf   = "windsurf"
-	AgentAider      = "aider"
-	AgentContinue   = "continue"
-	AgentCopilot    = "copilot"
-	AgentKilocode   = "kilocode"
-	AgentVibe       = "vibe"
-	AgentGoose      = "goose"
+	AgentClaudeCode  = "claude-code"
+	AgentCline       = "cline"
+	AgentCursor      = "cursor"
+	AgentOpenCode    = "opencode"
+	AgentCodex       = "codex"
+	AgentQwen        = "qwen"
+	AgentOpenClaw    = "openclaw"
+	AgentWindsurf    = "windsurf"
+	AgentAider       = "aider"
+	AgentContinue    = "continue"
+	AgentCopilot     = "copilot"
+	AgentKilocode    = "kilocode"
+	AgentVibe        = "vibe"
+	AgentGoose       = "goose"
+	AgentAntigravity = "antigravity" // WO-66: agy scanner target
 )
 
 // DefaultContextWindows maps agent names to default context window sizes in tokens.
 var DefaultContextWindows = map[string]int64{
-	AgentClaudeCode: 165_000,
-	AgentCline:      128_000,
-	AgentCursor:     128_000,
-	AgentOpenCode:   128_000,
-	AgentCodex:      128_000,
-	AgentQwen:       128_000,
-	AgentOpenClaw:   128_000,
-	AgentWindsurf:   128_000,
-	AgentAider:      128_000,
-	AgentContinue:   128_000,
-	AgentCopilot:    128_000,
-	AgentKilocode:   128_000,
-	AgentVibe:       128_000,
-	AgentGoose:      128_000,
+	AgentClaudeCode:  165_000,
+	AgentCline:       128_000,
+	AgentCursor:      128_000,
+	AgentOpenCode:    128_000,
+	AgentCodex:       128_000,
+	AgentQwen:        128_000,
+	AgentOpenClaw:    128_000,
+	AgentWindsurf:    128_000,
+	AgentAider:       128_000,
+	AgentContinue:    128_000,
+	AgentCopilot:     128_000,
+	AgentKilocode:    128_000,
+	AgentVibe:        128_000,
+	AgentGoose:       128_000,
+	AgentAntigravity: 1_000_000, // WO-66: Gemini 3 Pro long context
 }
 
 const defaultContextWindow int64 = 128_000

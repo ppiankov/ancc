@@ -22,6 +22,7 @@ type pathSpec struct {
 	FileExt       string // For file-based skills with specific extensions
 	SourcePrefix  string // e.g., "~/"
 	RecursiveSize bool
+	RequiredFile  string // WO-67: require a marker file before counting a skill directory
 	Parse         func(path string, r *AgentResult) (found bool, size int64)
 	Comment       string
 }
@@ -53,6 +54,20 @@ func skillDirProject(path, comment string) pathSpec {
 		RecursiveSize: true,
 		Comment:       comment,
 	}
+}
+
+// WO-67: Some agents require a marker file before a skill directory is active.
+func skillDirHomeRequiredFile(path, requiredFile, comment string) pathSpec {
+	spec := skillDirHome(path, comment)
+	spec.RequiredFile = requiredFile
+	return spec
+}
+
+// WO-67: Some agents require a marker file before a skill directory is active.
+func skillDirProjectRequiredFile(path, requiredFile, comment string) pathSpec {
+	spec := skillDirProject(path, comment)
+	spec.RequiredFile = requiredFile
+	return spec
 }
 
 func dirFilesHome(path, comment string) pathSpec {
@@ -127,13 +142,18 @@ func scanAgentPaths(projectDir, homeDir string, spec agentPathSpec) AgentResult 
 	}
 
 	var totalBytes int64
+	seenResolvedPaths := make(map[string]struct{})
 
-	process := func(baseDir, path, sourcePrefix, comment string, pt pathType, recursive bool, parseFunc func(string, *AgentResult) (bool, int64)) {
+	process := func(baseDir, path, sourcePrefix, comment string, pt pathType, recursive bool, requiredFile string, parseFunc func(string, *AgentResult) (bool, int64)) {
 		if baseDir == "" {
 			return
 		}
 
 		fullPath := resolvePath(filepath.Join(baseDir, path))
+		if _, ok := seenResolvedPaths[fullPath]; ok {
+			// WO-68: candidate Antigravity workflow paths may alias the same directory.
+			return
+		}
 		found := false
 		var size int64
 		var skillDirs []string
@@ -152,7 +172,11 @@ func scanAgentPaths(projectDir, homeDir string, spec agentPathSpec) AgentResult 
 					size = s
 				}
 			case pathTypeDirSkills:
-				skillDirs = listSkillDirs(fullPath)
+				if requiredFile != "" {
+					skillDirs = listSkillDirsContaining(fullPath, requiredFile)
+				} else {
+					skillDirs = listSkillDirs(fullPath)
+				}
 				if len(skillDirs) > 0 {
 					r.Skills += len(skillDirs)
 					for _, sd := range skillDirs {
@@ -203,6 +227,7 @@ func scanAgentPaths(projectDir, homeDir string, spec agentPathSpec) AgentResult 
 		}
 
 		if found {
+			seenResolvedPaths[fullPath] = struct{}{}
 			source := sourcePrefix + path
 			// Add trailing slash for directory types
 			if pt == pathTypeDirSkills || pt == pathTypeDirFiles || pt == pathTypeCustom {
@@ -217,10 +242,10 @@ func scanAgentPaths(projectDir, homeDir string, spec agentPathSpec) AgentResult 
 	}
 
 	for _, p := range spec.Home {
-		process(homeDir, p.Path, p.SourcePrefix, p.Comment, p.Type, p.RecursiveSize, p.Parse)
+		process(homeDir, p.Path, p.SourcePrefix, p.Comment, p.Type, p.RecursiveSize, p.RequiredFile, p.Parse)
 	}
 	for _, p := range spec.Project {
-		process(projectDir, p.Path, p.SourcePrefix, p.Comment, p.Type, p.RecursiveSize, p.Parse)
+		process(projectDir, p.Path, p.SourcePrefix, p.Comment, p.Type, p.RecursiveSize, p.RequiredFile, p.Parse)
 	}
 
 	r.Tokens = bytesToTokens(totalBytes)
@@ -316,6 +341,22 @@ func listSkillDirs(dir string) []string {
 		}
 	}
 	return dirs
+}
+
+// WO-67: agy skill roots only load immediate child directories with SKILL.md.
+func listSkillDirsContaining(dir, requiredFile string) []string {
+	var dirs []string
+	for _, skillDir := range listSkillDirs(dir) {
+		if regularFileExists(filepath.Join(dir, skillDir, requiredFile)) {
+			dirs = append(dirs, skillDir)
+		}
+	}
+	return dirs
+}
+
+func regularFileExists(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && !info.IsDir()
 }
 
 // listFiles returns regular file names in a directory.
@@ -669,6 +710,29 @@ func scanGoose(projectDir, homeDir string) AgentResult {
 		},
 		Project: []pathSpec{
 			fileProject(".goosehints", "(advisory)"),
+		},
+	}
+	return scanAgentPaths(projectDir, homeDir, spec)
+}
+
+// WO-66: Antigravity paths are advisory until agy hook/runtime integration is verified.
+func scanAntigravity(projectDir, homeDir string) AgentResult {
+	const antigravitySkillFile = "SKILL.md"
+
+	spec := agentPathSpec{
+		Name:      AgentAntigravity,
+		Advisory:  true,
+		ConfigDir: ".gemini/antigravity-cli",
+		Home: []pathSpec{
+			fileHome(".gemini/GEMINI.md", "(advisory)"),
+			skillDirHomeRequiredFile(".gemini/antigravity-cli/skills", antigravitySkillFile, "(advisory)"),
+			dirFilesHome(".gemini/antigravity-cli/global_workflows", "(advisory)"), // WO-68: legacy global workflow name.
+			dirFilesHome(".gemini/antigravity-cli/workflows", "(advisory)"),        // WO-68: agy CLI workflow candidate.
+		},
+		Project: []pathSpec{
+			fileProject("AGENTS.md", "(advisory)"),
+			skillDirProjectRequiredFile(".antigravitycli/skills", antigravitySkillFile, "(advisory)"),
+			dirFilesProject(".antigravitycli/workflows", "(advisory)"),
 		},
 	}
 	return scanAgentPaths(projectDir, homeDir, spec)

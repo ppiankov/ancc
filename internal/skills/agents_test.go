@@ -233,6 +233,12 @@ func TestAllAgents(t *testing.T) {
 			// goose
 			"home/.config/goose/config.yaml": "provider: anthropic",
 			"project/.goosehints":            "goose hints",
+			// WO-66: Antigravity scanner fixture.
+			"home/.gemini/GEMINI.md":                                   "gemini rules",
+			"home/.gemini/antigravity-cli/skills/review/SKILL.md":      "review skill",
+			"home/.gemini/antigravity-cli/global_workflows/release.md": "release workflow",
+			"project/.antigravitycli/skills/project/SKILL.md":          "project skill",
+			"project/.antigravitycli/workflows/project-workflow.md":    "project workflow",
 		},
 		dirs: []string{
 			"home/.claude/skills/homeskill",
@@ -260,6 +266,11 @@ func TestAllAgents(t *testing.T) {
 			"home/.aider/skills/review",
 			// vibe
 			"home/.vibe/skills/commit",
+			// WO-66: Antigravity scanner fixture.
+			"home/.gemini/antigravity-cli/skills/review",
+			"home/.gemini/antigravity-cli/global_workflows",
+			"project/.antigravitycli/skills/project",
+			"project/.antigravitycli/workflows",
 		},
 	}
 	tempRoot := mfs.setup(t)
@@ -287,6 +298,7 @@ func TestAllAgents(t *testing.T) {
 		{"Kilocode", scanKilocode, 4, 1, 0},
 		{"Vibe", scanVibe, 2, 0, 0},   // home skill dir + project AGENTS.md
 		{"Goose", scanGoose, 2, 0, 0}, // home config + project .goosehints
+		{"Antigravity", scanAntigravity, 6, 0, 0},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -302,4 +314,154 @@ func TestAllAgents(t *testing.T) {
 			}
 		})
 	}
+}
+
+// WO-66/WO-67: Antigravity scanner coverage includes SKILL.md filtering.
+func TestScanAntigravity(t *testing.T) {
+	mfs := &mockFileSystem{
+		files: map[string]string{
+			"home/.gemini/GEMINI.md":                                   "global rule",
+			"home/.gemini/antigravity-cli/skills/review/SKILL.md":      "global skill",
+			"home/.gemini/antigravity-cli/skills/missing/README.md":    "not a skill",
+			"home/.gemini/antigravity-cli/skills/nested/deep/SKILL.md": "not immediate",
+			"home/.gemini/antigravity-cli/global_workflows/release.md": "global workflow",
+			"home/.gemini/antigravity-cli/workflows/compat.md":         "compat workflow",
+			"project/AGENTS.md": "project rule",
+			"project/.antigravitycli/skills/project/SKILL.md":       "project skill",
+			"project/.antigravitycli/skills/empty/README.md":        "not a skill",
+			"project/.antigravitycli/workflows/project-workflow.md": "project workflow",
+		},
+		dirs: []string{
+			"home/.gemini/antigravity-cli/skills/review",
+			"home/.gemini/antigravity-cli/skills/missing",
+			"home/.gemini/antigravity-cli/skills/empty",
+			"home/.gemini/antigravity-cli/skills/nested/deep",
+			"home/.gemini/antigravity-cli/global_workflows",
+			"home/.gemini/antigravity-cli/workflows",
+			"project/.antigravitycli/skills/project",
+			"project/.antigravitycli/skills/empty",
+			"project/.antigravitycli/workflows",
+		},
+	}
+	tempRoot := mfs.setup(t)
+	homeDir := filepath.Join(tempRoot, "home")
+	projectDir := filepath.Join(tempRoot, "project")
+
+	result := scanAntigravity(projectDir, homeDir)
+	sort.Strings(result.Sources)
+
+	expectedSources := []string{
+		"./.antigravitycli/skills/ (advisory)",
+		"./.antigravitycli/workflows/ (advisory)",
+		"./AGENTS.md (advisory)",
+		"~/.gemini/GEMINI.md (advisory)",
+		"~/.gemini/antigravity-cli/global_workflows/ (advisory)",
+		"~/.gemini/antigravity-cli/skills/ (advisory)",
+		"~/.gemini/antigravity-cli/workflows/ (advisory)",
+	}
+
+	if result.Name != AgentAntigravity {
+		t.Errorf("Expected name %s, got %s", AgentAntigravity, result.Name)
+	}
+	if !result.Advisory {
+		t.Errorf("Expected Antigravity result to be advisory")
+	}
+	if result.ConfigDir != "~/.gemini/antigravity-cli" {
+		t.Errorf("Expected config_dir ~/.gemini/antigravity-cli, got %s", result.ConfigDir)
+	}
+	if result.Skills != 7 {
+		t.Errorf("Expected 7 skills, got %d", result.Skills)
+	}
+	if result.Hooks != 0 {
+		t.Errorf("Expected 0 hooks, got %d", result.Hooks)
+	}
+	if result.MCP != 0 {
+		t.Errorf("Expected 0 MCP, got %d", result.MCP)
+	}
+	if !reflect.DeepEqual(result.Sources, expectedSources) {
+		t.Errorf("Expected sources %v, got %v", expectedSources, result.Sources)
+	}
+	if skillFilePathExists(result.SkillFiles, "~/.gemini/antigravity-cli/skills/missing") {
+		t.Errorf("Expected missing SKILL.md directory to be ignored")
+	}
+	if skillFilePathExists(result.SkillFiles, "~/.gemini/antigravity-cli/skills/empty") {
+		t.Errorf("Expected empty directory to be ignored")
+	}
+	if skillFilePathExists(result.SkillFiles, "~/.gemini/antigravity-cli/skills/nested") {
+		t.Errorf("Expected nested-only SKILL.md directory to be ignored")
+	}
+	if ContextWindow(AgentAntigravity) != 1_000_000 {
+		t.Errorf("Expected Antigravity context window 1000000, got %d", ContextWindow(AgentAntigravity))
+	}
+}
+
+// WO-68: Optional Antigravity workflow directories must be absent-safe.
+func TestScanAntigravityWithoutWorkflows(t *testing.T) {
+	mfs := &mockFileSystem{
+		files: map[string]string{
+			"home/.gemini/GEMINI.md":                              "global rule",
+			"home/.gemini/antigravity-cli/skills/review/SKILL.md": "global skill",
+			"project/AGENTS.md":                                   "project rule",
+			"project/.antigravitycli/skills/project/SKILL.md":     "project skill",
+		},
+		dirs: []string{
+			"home/.gemini/antigravity-cli/skills/review",
+			"project/.antigravitycli/skills/project",
+		},
+	}
+	tempRoot := mfs.setup(t)
+	homeDir := filepath.Join(tempRoot, "home")
+	projectDir := filepath.Join(tempRoot, "project")
+
+	result := scanAntigravity(projectDir, homeDir)
+
+	if result.Skills != 4 {
+		t.Errorf("Expected 4 skills, got %d", result.Skills)
+	}
+	if skillFilePathExists(result.SkillFiles, "~/.gemini/antigravity-cli/global_workflows") {
+		t.Errorf("Expected missing global_workflows directory to be ignored")
+	}
+	if skillFilePathExists(result.SkillFiles, "~/.gemini/antigravity-cli/workflows") {
+		t.Errorf("Expected missing workflows directory to be ignored")
+	}
+	if skillFilePathExists(result.SkillFiles, "./.antigravitycli/workflows") {
+		t.Errorf("Expected missing project workflows directory to be ignored")
+	}
+}
+
+// WO-68: Candidate workflow paths may alias the same directory.
+func TestScanAntigravityDeduplicatesWorkflowAliases(t *testing.T) {
+	mfs := &mockFileSystem{
+		files: map[string]string{
+			"home/.gemini/GEMINI.md":                                   "global rule",
+			"home/.gemini/antigravity-cli/global_workflows/release.md": "global workflow",
+		},
+		dirs: []string{
+			"home/.gemini/antigravity-cli/global_workflows",
+		},
+	}
+	tempRoot := mfs.setup(t)
+	homeDir := filepath.Join(tempRoot, "home")
+	projectDir := filepath.Join(tempRoot, "project")
+
+	target := filepath.Join(homeDir, ".gemini/antigravity-cli/global_workflows")
+	link := filepath.Join(homeDir, ".gemini/antigravity-cli/workflows")
+	if err := os.Symlink(target, link); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+
+	result := scanAntigravity(projectDir, homeDir)
+
+	if result.Skills != 2 {
+		t.Errorf("Expected 2 skills, got %d", result.Skills)
+	}
+}
+
+func skillFilePathExists(files []SkillFile, path string) bool {
+	for _, file := range files {
+		if file.Path == path {
+			return true
+		}
+	}
+	return false
 }
