@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/ppiankov/ancc/internal/skills"
 	"gopkg.in/yaml.v3"
 )
 
@@ -97,6 +98,51 @@ func TestExportCmd_AgentFilter(t *testing.T) {
 	}
 }
 
+// WO-73: export output should keep invalid-location evidence for automation.
+func TestBuildExportOutput_IncludesInvalidLocations(t *testing.T) {
+	result := exportResultWithInvalidLocations()
+
+	out := buildExportOutput(result, "")
+
+	if len(out.InvalidLocations) != 2 {
+		t.Fatalf("expected 2 invalid locations, got %d", len(out.InvalidLocations))
+	}
+	if out.InvalidLocations[0].Path != "./.antigravitycli/skills/draft" {
+		t.Errorf("unexpected first invalid location: %+v", out.InvalidLocations[0])
+	}
+	if out.InvalidLocations[1].Path != "~/.cline/skills/draft" {
+		t.Errorf("unexpected second invalid location: %+v", out.InvalidLocations[1])
+	}
+}
+
+// WO-73: agent filters must not leak another agent's invalid locations.
+func TestBuildExportOutput_FiltersInvalidLocationsByAgent(t *testing.T) {
+	result := exportResultWithInvalidLocations()
+
+	out := buildExportOutput(result, skills.AgentAntigravity)
+
+	if len(out.Agents) != 1 {
+		t.Fatalf("expected 1 exported agent, got %d", len(out.Agents))
+	}
+	if out.Agents[0].Name != skills.AgentAntigravity {
+		t.Errorf("expected antigravity agent, got %q", out.Agents[0].Name)
+	}
+	if len(out.InvalidLocations) != 1 {
+		t.Fatalf("expected 1 invalid location, got %d", len(out.InvalidLocations))
+	}
+	if out.InvalidLocations[0].Agent != skills.AgentAntigravity {
+		t.Errorf("expected antigravity invalid location, got %+v", out.InvalidLocations[0])
+	}
+
+	out = buildExportOutput(result, "nonexistent")
+	if len(out.Agents) != 0 {
+		t.Fatalf("expected no agents for nonexistent filter, got %d", len(out.Agents))
+	}
+	if len(out.InvalidLocations) != 0 {
+		t.Fatalf("expected no invalid locations for nonexistent filter, got %d", len(out.InvalidLocations))
+	}
+}
+
 func TestExportCmd_AgentFilterNotFound(t *testing.T) {
 	proj := setupExportProject(t)
 
@@ -183,4 +229,25 @@ func TestExportCmd_NonExistentPath(t *testing.T) {
 	}
 
 	// Valid JSON is sufficient — agents may be nil on CI where no home configs exist.
+}
+
+func exportResultWithInvalidLocations() *skills.ScanResult {
+	return &skills.ScanResult{
+		Agents: []skills.AgentResult{
+			{Name: skills.AgentAntigravity, Advisory: true},
+			{Name: "cline"},
+		},
+		InvalidLocations: []skills.InvalidLocation{
+			{
+				Agent:  skills.AgentAntigravity,
+				Path:   "./.antigravitycli/skills/draft",
+				Reason: "missing required file SKILL.md",
+			},
+			{
+				Agent:  "cline",
+				Path:   "~/.cline/skills/draft",
+				Reason: "empty skill directory",
+			},
+		},
+	}
 }
