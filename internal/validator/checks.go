@@ -466,8 +466,7 @@ func checkToolReferencesValid(sf *skillmd.SkillFile) CheckResult {
 				if !isKnown {
 					validName := true
 					for _, r := range name {
-						if !((r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') ||
-							(r >= '0' && r <= '9') || r == '-' || r == '_' || r == '/') {
+						if !validToolNameRune(r) {
 							validName = false
 							break
 						}
@@ -492,6 +491,16 @@ func checkToolReferencesValid(sf *skillmd.SkillFile) CheckResult {
 		return warn(CheckToolReferencesValid, fmt.Sprintf("suspicious tool names: %v", suspiciousTools))
 	}
 	return pass(CheckToolReferencesValid, "all tool references look valid")
+}
+
+// WO-74: keep the valid tool-name character set explicit for staticcheck.
+func validToolNameRune(r rune) bool {
+	return (r >= 'a' && r <= 'z') ||
+		(r >= 'A' && r <= 'Z') ||
+		(r >= '0' && r <= '9') ||
+		r == '-' ||
+		r == '_' ||
+		r == '/'
 }
 
 // checkInstructionsSpecific verifies that instructions are specific and not overly vague.

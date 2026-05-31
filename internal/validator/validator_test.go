@@ -606,6 +606,28 @@ func TestCheckToolReferencesValid_SuspiciousTools(t *testing.T) {
 	}
 }
 
+func TestCheckToolReferencesValid_ToolNameCharacterSet(t *testing.T) {
+	sf := &skillmd.SkillFile{
+		Name: "testtool",
+		Sections: map[string]*skillmd.Section{
+			"Tools": {
+				Heading: "Tools",
+				Content: "`claude-code`\n`agent/tool_1`\n`bad.name`",
+			},
+		},
+	}
+	r := checkToolReferencesValid(sf)
+	if r.Status != StatusWarn {
+		t.Errorf("status = %q, want %q; message: %s", r.Status, StatusWarn, r.Message)
+	}
+	if !strings.Contains(r.Message, "bad.name") {
+		t.Errorf("message = %q, want to contain invalid tool name", r.Message)
+	}
+	if strings.Contains(r.Message, "claude-code") || strings.Contains(r.Message, "agent/tool_1") {
+		t.Errorf("message = %q, should not flag valid tool names", r.Message)
+	}
+}
+
 func TestCheckInstructionsSpecific_NoVagueInstructions(t *testing.T) {
 	sf := &skillmd.SkillFile{
 		Name: "testtool",
