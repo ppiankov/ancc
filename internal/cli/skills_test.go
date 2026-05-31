@@ -102,6 +102,65 @@ func TestSkillsCmd_JSONIncludesTokens(t *testing.T) {
 	}
 }
 
+func TestFormatSkillsTextShowsInvalidLocations(t *testing.T) {
+	result := &skills.ScanResult{
+		InvalidLocations: []skills.InvalidLocation{
+			{
+				Agent:  skills.AgentAntigravity,
+				Path:   "./.antigravitycli/skills/scratch",
+				Reason: "missing required file SKILL.md",
+			},
+		},
+	}
+
+	buf := new(bytes.Buffer)
+	formatSkillsText(buf, result, false, 0)
+	output := buf.String()
+
+	for _, want := range []string{
+		"No agent configurations found.",
+		"Invalid locations:",
+		skills.AgentAntigravity,
+		"./.antigravitycli/skills/scratch",
+		"missing required file SKILL.md",
+	} {
+		if !strings.Contains(output, want) {
+			t.Errorf("expected output to contain %q; got: %s", want, output)
+		}
+	}
+}
+
+func TestFormatSkillsJSONWithBudgetIncludesInvalidLocations(t *testing.T) {
+	result := &skills.ScanResult{
+		Path: "/tmp/project",
+		InvalidLocations: []skills.InvalidLocation{
+			{
+				Agent:  skills.AgentAntigravity,
+				Path:   "~/.gemini/antigravity-cli/skills/scratch",
+				Reason: "missing required file SKILL.md",
+			},
+		},
+	}
+
+	buf := new(bytes.Buffer)
+	if err := formatSkillsJSON(buf, result, 200000); err != nil {
+		t.Fatalf("formatSkillsJSON returned error: %v", err)
+	}
+
+	var raw struct {
+		InvalidLocations []skills.InvalidLocation `json:"invalid_locations"`
+	}
+	if err := json.Unmarshal(buf.Bytes(), &raw); err != nil {
+		t.Fatalf("invalid JSON: %v\nraw: %s", err, buf.String())
+	}
+	if len(raw.InvalidLocations) != 1 {
+		t.Fatalf("expected 1 invalid location, got %d", len(raw.InvalidLocations))
+	}
+	if raw.InvalidLocations[0].Path != "~/.gemini/antigravity-cli/skills/scratch" {
+		t.Errorf("unexpected invalid location: %+v", raw.InvalidLocations[0])
+	}
+}
+
 func TestSkillsCmd_BudgetFlag(t *testing.T) {
 	proj := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(proj, ".clinerules"), 0o755); err != nil {

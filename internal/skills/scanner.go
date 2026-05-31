@@ -47,6 +47,7 @@ func ScanWithHome(projectDir, homeDir string) (*ScanResult, error) {
 
 	for _, scan := range scanners {
 		agent := scan(projectDir, homeDir)
+		result.InvalidLocations = append(result.InvalidLocations, agent.InvalidLocations...) // WO-72: surface invalid candidates without counting them
 		if agent.Skills > 0 || agent.Hooks > 0 || agent.MCP > 0 || agent.Tokens > 0 {
 			result.Agents = append(result.Agents, agent)
 		}

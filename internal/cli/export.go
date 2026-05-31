@@ -12,7 +12,8 @@ import (
 
 // exportOutput is the top-level export structure.
 type exportOutput struct {
-	Agents []exportAgent `json:"agents" yaml:"agents"`
+	Agents           []exportAgent            `json:"agents" yaml:"agents"`
+	InvalidLocations []skills.InvalidLocation `json:"invalid_locations,omitempty" yaml:"invalid_locations,omitempty"` // WO-72: rejected candidate paths
 }
 
 // exportAgent holds one agent's configuration summary for export.
@@ -59,6 +60,13 @@ Output structure:
         "sources": [...],
         "advisory": false
       }
+    ],
+    "invalid_locations": [
+      {
+        "agent": "antigravity",
+        "path": "./.antigravitycli/skills/draft",
+        "reason": "missing required file SKILL.md"
+      }
     ]
   }`,
 		Args: cobra.MaximumNArgs(1),
@@ -75,7 +83,7 @@ Output structure:
 
 			out := buildExportOutput(result, agent)
 
-			if agent != "" && len(out.Agents) == 0 {
+			if agent != "" && len(out.Agents) == 0 && len(out.InvalidLocations) == 0 {
 				return fmt.Errorf("agent %q not found", agent)
 			}
 
@@ -98,7 +106,9 @@ Output structure:
 }
 
 func buildExportOutput(result *skills.ScanResult, agentFilter string) *exportOutput {
-	out := &exportOutput{}
+	out := &exportOutput{
+		InvalidLocations: filterInvalidLocations(result.InvalidLocations, agentFilter),
+	}
 	for _, a := range result.Agents {
 		if agentFilter != "" && a.Name != agentFilter {
 			continue
@@ -120,6 +130,20 @@ func buildExportOutput(result *skills.ScanResult, agentFilter string) *exportOut
 	return out
 }
 
+// WO-72: keep export invalid-location evidence aligned with an optional agent filter.
+func filterInvalidLocations(locations []skills.InvalidLocation, agentFilter string) []skills.InvalidLocation {
+	if agentFilter == "" {
+		return locations
+	}
+	var filtered []skills.InvalidLocation
+	for _, loc := range locations {
+		if loc.Agent == agentFilter {
+			filtered = append(filtered, loc)
+		}
+	}
+	return filtered
+}
+
 func writeExportJSON(w io.Writer, out *exportOutput) error {
 	enc := json.NewEncoder(w)
 	enc.SetIndent("", "  ")
@@ -129,6 +153,8 @@ func writeExportJSON(w io.Writer, out *exportOutput) error {
 func writeExportYAML(w io.Writer, out *exportOutput) error {
 	enc := yaml.NewEncoder(w)
 	enc.SetIndent(2)
-	defer enc.Close()
-	return enc.Encode(out)
+	if err := enc.Encode(out); err != nil {
+		return err
+	}
+	return enc.Close()
 }

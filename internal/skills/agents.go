@@ -7,6 +7,8 @@ import (
 	"strings"
 )
 
+const missingRequiredSkillFileReasonPrefix = "missing required file "
+
 // agentPathSpec defines the configuration for scanning an agent's files.
 type agentPathSpec struct {
 	Name      AgentName
@@ -174,6 +176,8 @@ func scanAgentPaths(projectDir, homeDir string, spec agentPathSpec) AgentResult 
 			case pathTypeDirSkills:
 				if requiredFile != "" {
 					skillDirs = listSkillDirsContaining(fullPath, requiredFile)
+					r.InvalidLocations = append(r.InvalidLocations,
+						invalidSkillDirs(spec.Name, fullPath, sourcePrefix+path, requiredFile)...)
 				} else {
 					skillDirs = listSkillDirs(fullPath)
 				}
@@ -359,6 +363,22 @@ func listSkillDirsContaining(dir, requiredFile string) []string {
 func regularFileExists(path string) bool {
 	info, err := os.Stat(path)
 	return err == nil && !info.IsDir()
+}
+
+// WO-72: expose required-marker candidate dirs that exist but are not valid skills.
+func invalidSkillDirs(agent, dir, sourcePath, requiredFile string) []InvalidLocation {
+	var invalid []InvalidLocation
+	for _, skillDir := range listSkillDirs(dir) {
+		if regularFileExists(filepath.Join(dir, skillDir, requiredFile)) {
+			continue
+		}
+		invalid = append(invalid, InvalidLocation{
+			Agent:  agent,
+			Path:   sourcePath + "/" + skillDir,
+			Reason: missingRequiredSkillFileReasonPrefix + requiredFile,
+		})
+	}
+	return invalid
 }
 
 // WO-70: required-marker skill roots should count only dirs that became skills.

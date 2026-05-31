@@ -92,6 +92,13 @@ Scans for agent configurations in a directory. Detects 15 agents: Claude Code, C
       "budget_pct": 7.7
     }
   ],
+  "invalid_locations": [
+    {
+      "agent": "antigravity",
+      "path": "./.antigravitycli/skills/draft",
+      "reason": "missing required file SKILL.md"
+    }
+  ],
   "product": {
     "path": "/path/to/project/docs/SKILL.md",
     "name": "ancc"
@@ -99,7 +106,7 @@ Scans for agent configurations in a directory. Detects 15 agents: Claude Code, C
 }
 ```
 
-Note: `budget_pct` field is only present when `--budget` is set.
+Note: `budget_pct` field is only present when `--budget` is set. Antigravity skill directories must contain `SKILL.md`; candidates without that marker are reported in `invalid_locations` and are not counted as skills, sources, or tokens.
 
 **Exit codes:**
 - 0: scan completed
@@ -414,4 +421,4 @@ ancc doctor --format json | jq '.status'
 | goose | `~/.config/goose/config.yaml`, `~/.config/goose/skills/`, `.goosehints` | Yes |
 | antigravity | `~/.gemini/GEMINI.md`, `~/.gemini/antigravity-cli/skills/`, `~/.gemini/antigravity-cli/global_workflows/`, `~/.gemini/antigravity-cli/workflows/`, `AGENTS.md`, `.antigravitycli/skills/`, `.antigravitycli/workflows/` | Yes |
 
-Advisory agents are detected but not considered primary — their config paths are labeled accordingly in output. Antigravity detection is advisory while agy CLI customization paths continue to settle.
+Advisory agents are detected but not considered primary — their config paths are labeled accordingly in output. Antigravity detection is advisory while agy CLI customization paths continue to settle. Antigravity skill directories must contain `SKILL.md`; invalid candidates are reported separately instead of being counted.

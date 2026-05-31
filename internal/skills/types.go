@@ -57,6 +57,13 @@ type SkillFile struct {
 	Type string `json:"type" yaml:"type"` // "file" or "dir"
 }
 
+// InvalidLocation represents a candidate location that was present but unusable.
+type InvalidLocation struct {
+	Agent  string `json:"agent" yaml:"agent"`   // WO-72: identify which scanner rejected the location
+	Path   string `json:"path" yaml:"path"`     // WO-72: user-visible rejected candidate path
+	Reason string `json:"reason" yaml:"reason"` // WO-72: deterministic rejection reason
+}
+
 // HookConfig represents a hook configuration.
 type HookConfig struct {
 	Event string `json:"event" yaml:"event"`
@@ -72,17 +79,18 @@ type MCPServer struct {
 
 // AgentResult holds the scan result for a single agent.
 type AgentResult struct {
-	Name        string       `json:"name"`
-	ConfigDir   string       `json:"config_dir"`
-	Skills      int          `json:"skills"`
-	SkillFiles  []SkillFile  `json:"skill_files,omitempty"`
-	Hooks       int          `json:"hooks"`
-	HookConfigs []HookConfig `json:"hook_configs,omitempty"`
-	MCP         int          `json:"mcp"`
-	MCPServers  []MCPServer  `json:"mcp_servers,omitempty"`
-	Tokens      int64        `json:"tokens"`
-	Sources     []string     `json:"sources"`
-	Advisory    bool         `json:"advisory"`
+	Name             string            `json:"name"`
+	ConfigDir        string            `json:"config_dir"`
+	Skills           int               `json:"skills"`
+	SkillFiles       []SkillFile       `json:"skill_files,omitempty"`
+	Hooks            int               `json:"hooks"`
+	HookConfigs      []HookConfig      `json:"hook_configs,omitempty"`
+	MCP              int               `json:"mcp"`
+	MCPServers       []MCPServer       `json:"mcp_servers,omitempty"`
+	Tokens           int64             `json:"tokens"`
+	Sources          []string          `json:"sources"`
+	InvalidLocations []InvalidLocation `json:"-" yaml:"-"` // WO-72: aggregate into ScanResult without emitting invalid-only agents
+	Advisory         bool              `json:"advisory"`
 }
 
 // ANCCProduct holds ANCC product SKILL.md info if present.
@@ -93,7 +101,8 @@ type ANCCProduct struct {
 
 // ScanResult holds the complete scan output.
 type ScanResult struct {
-	Path    string        `json:"path"`
-	Agents  []AgentResult `json:"agents"`
-	Product *ANCCProduct  `json:"product,omitempty"`
+	Path             string            `json:"path"`
+	Agents           []AgentResult     `json:"agents"`
+	InvalidLocations []InvalidLocation `json:"invalid_locations,omitempty"` // WO-72: rejected candidate locations for users and automation
+	Product          *ANCCProduct      `json:"product,omitempty"`
 }

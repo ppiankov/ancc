@@ -65,9 +65,13 @@ const (
 )
 
 func formatSkillsText(w io.Writer, result *skills.ScanResult, showTokens bool, budget int) {
-	if len(result.Agents) == 0 && result.Product == nil {
+	if len(result.Agents) == 0 && result.Product == nil && len(result.InvalidLocations) == 0 {
 		_, _ = fmt.Fprintln(w, "No agent configurations found.")
 		return
+	}
+
+	if len(result.Agents) == 0 && result.Product == nil {
+		_, _ = fmt.Fprintln(w, "No agent configurations found.")
 	}
 
 	if len(result.Agents) > 0 {
@@ -106,6 +110,18 @@ func formatSkillsText(w io.Writer, result *skills.ScanResult, showTokens bool, b
 		}
 	}
 
+	if len(result.InvalidLocations) > 0 {
+		// WO-72: show rejected candidates separately so counts stay meaningful.
+		if len(result.Agents) > 0 {
+			_, _ = fmt.Fprintln(w)
+		}
+		_, _ = fmt.Fprintln(w, "  Invalid locations:")
+		for _, loc := range result.InvalidLocations {
+			_, _ = fmt.Fprintf(w, "  %-*s %s (%s)\n",
+				skillsAgentWidth, loc.Agent, loc.Path, loc.Reason)
+		}
+	}
+
 	if result.Product != nil {
 		_, _ = fmt.Fprintln(w)
 		_, _ = fmt.Fprintf(w, "  ANCC product: %s (name: %s)\n",
@@ -140,9 +156,10 @@ type agentWithBudget struct {
 }
 
 type scanResultWithBudget struct {
-	Path    string              `json:"path"`
-	Agents  []agentWithBudget   `json:"agents"`
-	Product *skills.ANCCProduct `json:"product,omitempty"`
+	Path             string                   `json:"path"`
+	Agents           []agentWithBudget        `json:"agents"`
+	InvalidLocations []skills.InvalidLocation `json:"invalid_locations,omitempty"`
+	Product          *skills.ANCCProduct      `json:"product,omitempty"`
 }
 
 func formatSkillsJSON(w io.Writer, result *skills.ScanResult, budget int) error {
@@ -154,8 +171,9 @@ func formatSkillsJSON(w io.Writer, result *skills.ScanResult, budget int) error 
 	}
 
 	out := scanResultWithBudget{
-		Path:    result.Path,
-		Product: result.Product,
+		Path:             result.Path,
+		InvalidLocations: result.InvalidLocations,
+		Product:          result.Product,
 	}
 	for _, a := range result.Agents {
 		pct := float64(a.Tokens) / float64(budget) * 100

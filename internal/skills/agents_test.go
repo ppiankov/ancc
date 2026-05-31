@@ -387,6 +387,20 @@ func TestScanAntigravity(t *testing.T) {
 	if result.Tokens != bytesToTokens(countedBytes) {
 		t.Errorf("Expected %d tokens, got %d", bytesToTokens(countedBytes), result.Tokens)
 	}
+	expectedInvalid := []string{
+		"~/.gemini/antigravity-cli/skills/empty",
+		"~/.gemini/antigravity-cli/skills/missing",
+		"~/.gemini/antigravity-cli/skills/nested",
+		"./.antigravitycli/skills/empty",
+	}
+	if len(result.InvalidLocations) != len(expectedInvalid) {
+		t.Errorf("Expected %d invalid locations, got %d", len(expectedInvalid), len(result.InvalidLocations))
+	}
+	for _, path := range expectedInvalid {
+		if !invalidLocationExists(result.InvalidLocations, AgentAntigravity, path, "missing required file SKILL.md") {
+			t.Errorf("Expected invalid location %s", path)
+		}
+	}
 	if skillFilePathExists(result.SkillFiles, "~/.gemini/antigravity-cli/skills/missing") {
 		t.Errorf("Expected missing SKILL.md directory to be ignored")
 	}
@@ -423,6 +437,15 @@ func TestScanAntigravityInvalidSkillRootsDoNotEmitAgent(t *testing.T) {
 	}
 	if agentResultExists(result.Agents, AgentAntigravity) {
 		t.Errorf("Expected invalid-only Antigravity skill roots to be ignored")
+	}
+	if len(result.InvalidLocations) != 2 {
+		t.Fatalf("Expected 2 invalid Antigravity locations, got %d", len(result.InvalidLocations))
+	}
+	if !invalidLocationExists(result.InvalidLocations, AgentAntigravity, "~/.gemini/antigravity-cli/skills/scratch", "missing required file SKILL.md") {
+		t.Errorf("Expected invalid home Antigravity skill root")
+	}
+	if !invalidLocationExists(result.InvalidLocations, AgentAntigravity, "./.antigravitycli/skills/scratch", "missing required file SKILL.md") {
+		t.Errorf("Expected invalid project Antigravity skill root")
 	}
 }
 
@@ -500,6 +523,15 @@ func skillFilePathExists(files []SkillFile, path string) bool {
 func agentResultExists(agents []AgentResult, name string) bool {
 	for _, agent := range agents {
 		if agent.Name == name {
+			return true
+		}
+	}
+	return false
+}
+
+func invalidLocationExists(locations []InvalidLocation, agent, path, reason string) bool {
+	for _, loc := range locations {
+		if loc.Agent == agent && loc.Path == path && loc.Reason == reason {
 			return true
 		}
 	}
