@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+### Added
+
+- Antigravity advisory scanner support in `ancc skills`, bringing detected agents from 14 to 15
+- Invalid or rejected Antigravity scan locations are surfaced in text, JSON, and export output, including `--agent` filtering
+
+### Fixed
+
+- Antigravity skill directories now require a `SKILL.md` marker before being counted as skills or tokens
+
 ## [0.8.0] - 2026-03-26
 
 ### Added
