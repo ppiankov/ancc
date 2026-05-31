@@ -381,6 +381,12 @@ func TestScanAntigravity(t *testing.T) {
 	if !reflect.DeepEqual(result.Sources, expectedSources) {
 		t.Errorf("Expected sources %v, got %v", expectedSources, result.Sources)
 	}
+	countedBytes := int64(len("global rule") + len("global skill") + len("global workflow") +
+		len("compat workflow") + len("project rule") + len("project skill") +
+		len("project workflow"))
+	if result.Tokens != bytesToTokens(countedBytes) {
+		t.Errorf("Expected %d tokens, got %d", bytesToTokens(countedBytes), result.Tokens)
+	}
 	if skillFilePathExists(result.SkillFiles, "~/.gemini/antigravity-cli/skills/missing") {
 		t.Errorf("Expected missing SKILL.md directory to be ignored")
 	}
@@ -392,6 +398,31 @@ func TestScanAntigravity(t *testing.T) {
 	}
 	if ContextWindow(AgentAntigravity) != 1_000_000 {
 		t.Errorf("Expected Antigravity context window 1000000, got %d", ContextWindow(AgentAntigravity))
+	}
+}
+
+// WO-70: invalid-only Antigravity skill roots must not emit a token-only agent.
+func TestScanAntigravityInvalidSkillRootsDoNotEmitAgent(t *testing.T) {
+	mfs := &mockFileSystem{
+		files: map[string]string{
+			"home/.gemini/antigravity-cli/skills/scratch/README.md": "not a skill",
+			"project/.antigravitycli/skills/scratch/README.md":      "not a skill",
+		},
+		dirs: []string{
+			"home/.gemini/antigravity-cli/skills/scratch",
+			"project/.antigravitycli/skills/scratch",
+		},
+	}
+	tempRoot := mfs.setup(t)
+	homeDir := filepath.Join(tempRoot, "home")
+	projectDir := filepath.Join(tempRoot, "project")
+
+	result, err := ScanWithHome(projectDir, homeDir)
+	if err != nil {
+		t.Fatalf("ScanWithHome returned error: %v", err)
+	}
+	if agentResultExists(result.Agents, AgentAntigravity) {
+		t.Errorf("Expected invalid-only Antigravity skill roots to be ignored")
 	}
 }
 
@@ -460,6 +491,15 @@ func TestScanAntigravityDeduplicatesWorkflowAliases(t *testing.T) {
 func skillFilePathExists(files []SkillFile, path string) bool {
 	for _, file := range files {
 		if file.Path == path {
+			return true
+		}
+	}
+	return false
+}
+
+func agentResultExists(agents []AgentResult, name string) bool {
+	for _, agent := range agents {
+		if agent.Name == name {
 			return true
 		}
 	}

@@ -69,7 +69,7 @@ Creates a template SKILL.md in the current directory with all required sections.
 
 ### ancc skills
 
-Scans for agent configurations in a directory. Detects 11 agents: Claude Code, Cline, Cursor, OpenCode, Codex, Qwen, OpenClaw, Windsurf, Aider, Continue, and Copilot.
+Scans for agent configurations in a directory. Detects 15 agents: Claude Code, Cline, Cursor, OpenCode, Codex, Qwen, OpenClaw, Windsurf, Aider, Continue, Copilot, Kilocode, Vibe, Goose, and Antigravity.
 
 **Flags:**
 - `--format json` — output as JSON (default: human-readable)
@@ -412,5 +412,6 @@ ancc doctor --format json | jq '.status'
 | kilocode | `~/.kilocode/skills/`, `~/.config/kilo/opencode.json`, `.kilocode/rules/`, `.kilocode/skills/` | No |
 | vibe | `~/.vibe/skills/`, `AGENTS.md` (project) | Yes |
 | goose | `~/.config/goose/config.yaml`, `~/.config/goose/skills/`, `.goosehints` | Yes |
+| antigravity | `~/.gemini/GEMINI.md`, `~/.gemini/antigravity-cli/skills/`, `~/.gemini/antigravity-cli/global_workflows/`, `~/.gemini/antigravity-cli/workflows/`, `AGENTS.md`, `.antigravitycli/skills/`, `.antigravitycli/workflows/` | Yes |
 
-Advisory agents are detected but not considered primary — their config paths are labeled accordingly in output.
+Advisory agents are detected but not considered primary — their config paths are labeled accordingly in output. Antigravity detection is advisory while agy CLI customization paths continue to settle.

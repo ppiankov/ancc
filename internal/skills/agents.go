@@ -187,7 +187,9 @@ func scanAgentPaths(projectDir, homeDir string, spec agentPathSpec) AgentResult 
 					}
 					found = true
 				}
-				if recursive {
+				if requiredFile != "" {
+					size = skillDirBytes(fullPath, skillDirs, recursive)
+				} else if recursive {
 					size = dirBytesRecursive(fullPath)
 				} else {
 					size = dirBytes(fullPath)
@@ -357,6 +359,20 @@ func listSkillDirsContaining(dir, requiredFile string) []string {
 func regularFileExists(path string) bool {
 	info, err := os.Stat(path)
 	return err == nil && !info.IsDir()
+}
+
+// WO-70: required-marker skill roots should count only dirs that became skills.
+func skillDirBytes(dir string, skillDirs []string, recursive bool) int64 {
+	var total int64
+	for _, skillDir := range skillDirs {
+		path := filepath.Join(dir, skillDir)
+		if recursive {
+			total += dirBytesRecursive(path)
+			continue
+		}
+		total += dirBytes(path)
+	}
+	return total
 }
 
 // listFiles returns regular file names in a directory.
