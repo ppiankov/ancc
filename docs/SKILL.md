@@ -91,6 +91,31 @@ Scans for agent configurations in a directory. Detects 15 agents: Claude Code, C
       "enforcement": "unverified",
       "advisory": false,
       "budget_pct": 7.7
+    },
+    {
+      "name": "antigravity",
+      "skills": 3,
+      "hooks": 0,
+      "mcp": 0,
+      "tokens": 1200,
+      "sources": ["~/.gemini/GEMINI.md"],
+      "enforcement": "advisory",
+      "evidence": [
+        {
+          "kind": "real_tool_result",
+          "note": "trustedWorkspaces does not confine reads to workspace"
+        },
+        {
+          "kind": "unfakeable_output",
+          "note": "outside-workspace /tmp read returned a UUID-verified probe payload"
+        },
+        {
+          "kind": "agent_self_report",
+          "note": "YES/NO self-report probes are unreliable"
+        }
+      ],
+      "warning": "agent self-reports are not valid evidence for security probes",
+      "advisory": true
     }
   ],
   "invalid_locations": [
@@ -107,7 +132,7 @@ Scans for agent configurations in a directory. Detects 15 agents: Claude Code, C
 }
 ```
 
-Note: `budget_pct` field is only present when `--budget` is set. `enforcement` reports `enforcing`, `advisory`, or `unverified`; advisory text output includes evidence and mitigation without changing exit codes. Antigravity skill directories must contain `SKILL.md`; candidates without that marker are reported in `invalid_locations` and are not counted as skills, sources, or tokens.
+Note: `budget_pct` field is only present when `--budget` is set. `enforcement` reports `enforcing`, `advisory`, or `unverified`; advisory text output includes the evidence standard without changing exit codes. `evidence.kind` values such as `real_tool_result` and `unfakeable_output` can support advisory/enforcing posture; `vendor_docs` and `agent_self_report` cannot. Antigravity skill directories must contain `SKILL.md`; candidates without that marker are reported in `invalid_locations` and are not counted as skills, sources, or tokens.
 
 **Exit codes:**
 - 0: scan completed
@@ -214,15 +239,28 @@ Checks ancc's own health and reports companion tools.
     {
       "name": "antigravity",
       "enforcement": "advisory",
-      "enforcement_evidence": "live probe finding: trusted workspace policy is informational",
-      "caution": "config is advisory only",
-      "mitigation": "config does not enforce reads; bound via external sandbox or route sensitive work elsewhere"
+      "enforcement_evidence": "trustedWorkspaces does not confine reads to workspace; outside-workspace /tmp read returned a UUID-verified probe payload",
+      "evidence": [
+        {
+          "kind": "real_tool_result",
+          "note": "trustedWorkspaces does not confine reads to workspace"
+        },
+        {
+          "kind": "unfakeable_output",
+          "note": "outside-workspace /tmp read returned a UUID-verified probe payload"
+        },
+        {
+          "kind": "agent_self_report",
+          "note": "YES/NO self-report probes are unreliable"
+        }
+      ],
+      "warning": "agent self-reports are not valid evidence for security probes"
     }
   ]
 }
 ```
 
-Text output also shows each detected agent's posture. Advisory posture is informational and does not make `doctor` fail.
+Text output also shows each detected agent's posture. Advisory posture is informational, teaches the valid/invalid evidence standard, and does not make `doctor` fail.
 
 **Exit codes:**
 - 0: all healthy or warnings only
@@ -433,4 +471,4 @@ ancc doctor --format json | jq '.status'
 | goose | `~/.config/goose/config.yaml`, `~/.config/goose/skills/`, `.goosehints` | Yes |
 | antigravity | `~/.gemini/GEMINI.md`, `~/.gemini/antigravity-cli/skills/`, `~/.gemini/antigravity-cli/global_workflows/`, `~/.gemini/antigravity-cli/workflows/`, `AGENTS.md`, `.antigravitycli/skills/`, `.antigravitycli/workflows/` | Yes |
 
-Advisory agents are detected but not considered primary — their config paths are labeled accordingly in output. Use the `enforcement` field for current posture; the legacy `advisory` field is retained for compatibility. Antigravity skill directories must contain `SKILL.md`; invalid candidates are reported separately instead of being counted.
+Advisory agents are detected but not considered primary — their config paths are labeled accordingly in output. Use the `enforcement` field plus structured `evidence` for current posture; the legacy `advisory` field is retained for compatibility. Antigravity skill directories must contain `SKILL.md`; invalid candidates are reported separately instead of being counted.

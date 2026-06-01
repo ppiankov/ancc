@@ -60,7 +60,7 @@ Agents: read [`docs/SKILL.md`](docs/SKILL.md) for install, commands, JSON parsin
 
 Key pattern for agents: `ancc validate . --format json` returns machine-parseable validation results.
 
-`ancc skills` and `ancc doctor` include each detected agent's enforcement posture; advisory posture includes evidence and mitigation without changing exit codes.
+`ancc skills` and `ancc doctor` include each detected agent's enforcement posture; advisory posture includes an evidence-quality warning without changing exit codes.
 
 The companion [ANCC conventions](docs/conventions.md) define nine governed conventions across Behavior, Execution, Spend, and Time, including `enforcement-provenance` for evidence-backed guardrail claims.
 
@@ -132,7 +132,7 @@ internal/
 
 ancc detects 15 agents: claude-code, cline, cursor, opencode, codex, qwen, openclaw, windsurf, aider, continue, copilot, kilocode, vibe, goose, antigravity.
 
-Each detected agent reports an enforcement posture: `enforcing`, `advisory`, or `unverified`. Advisory posture is informational and includes evidence plus mitigation in command output.
+Each detected agent reports an enforcement posture: `enforcing`, `advisory`, or `unverified`. Advisory posture is informational and teaches which evidence is valid for security probes.
 
 See [`docs/SKILL.md`](docs/SKILL.md) for full config paths per agent.
 

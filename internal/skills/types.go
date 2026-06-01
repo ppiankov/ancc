@@ -45,13 +45,44 @@ var DefaultContextWindows = map[string]int64{
 
 const defaultContextWindow int64 = 128_000
 
-// Enforcement identifies whether an agent configuration boundary is proven to enforce.
-type Enforcement string
+// EnforcementPosture identifies whether an agent boundary is proven by valid evidence.
+// WO-77: scanner posture is a 3-state evidence-backed claim.
+type EnforcementPosture string
+
+// Enforcement is the legacy type name for enforcement posture.
+type Enforcement = EnforcementPosture
 
 const (
-	EnforcementEnforcing  Enforcement = "enforcing"
-	EnforcementAdvisory   Enforcement = "advisory"
-	EnforcementUnverified Enforcement = "unverified"
+	EnforcementEnforcing  EnforcementPosture = "enforcing"
+	EnforcementAdvisory   EnforcementPosture = "advisory"
+	EnforcementUnverified EnforcementPosture = "unverified"
+)
+
+// EvidenceKind identifies the class of evidence behind an enforcement posture.
+// WO-77: self-reports and docs are not valid security-probe evidence.
+type EvidenceKind string
+
+const (
+	EvidenceVendorDocs       EvidenceKind = "vendor_docs"
+	EvidenceAgentSelfReport  EvidenceKind = "agent_self_report"
+	EvidenceRealToolResult   EvidenceKind = "real_tool_result"
+	EvidenceUnfakeableOutput EvidenceKind = "unfakeable_output"
+)
+
+// SecurityProbeSelfReportWarning is shown when posture evidence includes rejected self-report probes.
+const SecurityProbeSelfReportWarning = "agent self-reports are not valid evidence for security probes"
+
+var (
+	ValidEvidenceStandard = []string{ // WO-77: valid evidence classes for advisory/enforcing posture.
+		"real OS result",
+		"real tool error",
+		"unfakeable payload",
+	}
+	InvalidEvidenceStandard = []string{ // WO-77: invalid evidence classes for security probes.
+		"vendor docs",
+		"agent says \"YES\"",
+		"model explanation",
+	}
 )
 
 // ContextWindow returns the default context window for the named agent.
@@ -88,30 +119,45 @@ type MCPServer struct {
 	Config string `json:"config,omitempty" yaml:"config,omitempty"`
 }
 
+// EvidenceItem records why an enforcement posture can or cannot be trusted.
+// WO-77: posture evidence is structured by kind so invalid proof cannot justify advisory/enforcing.
+type EvidenceItem struct {
+	Kind EvidenceKind `json:"kind" yaml:"kind"` // WO-77: evidence class controls posture validity
+	Note string       `json:"note" yaml:"note"` // WO-77: concise cited probe note
+}
+
 // AgentResult holds the scan result for a single agent.
 type AgentResult struct {
-	Name                string            `json:"name"`
-	ConfigDir           string            `json:"config_dir"`
-	Skills              int               `json:"skills"`
-	SkillFiles          []SkillFile       `json:"skill_files,omitempty"`
-	Hooks               int               `json:"hooks"`
-	HookConfigs         []HookConfig      `json:"hook_configs,omitempty"`
-	MCP                 int               `json:"mcp"`
-	MCPServers          []MCPServer       `json:"mcp_servers,omitempty"`
-	Tokens              int64             `json:"tokens"`
-	Sources             []string          `json:"sources"`
-	InvalidLocations    []InvalidLocation `json:"-" yaml:"-"`                     // WO-72: aggregate into ScanResult without emitting invalid-only agents
-	Enforcement         Enforcement       `json:"enforcement"`                    // WO-77: evidence-backed enforcement posture
-	EnforcementEvidence string            `json:"enforcement_evidence,omitempty"` // WO-77: citation required for enforcing/advisory
-	Advisory            bool              `json:"advisory"`                       // WO-77: deprecated alias for Enforcement==advisory
+	Name                string             `json:"name"`
+	ConfigDir           string             `json:"config_dir"`
+	Skills              int                `json:"skills"`
+	SkillFiles          []SkillFile        `json:"skill_files,omitempty"`
+	Hooks               int                `json:"hooks"`
+	HookConfigs         []HookConfig       `json:"hook_configs,omitempty"`
+	MCP                 int                `json:"mcp"`
+	MCPServers          []MCPServer        `json:"mcp_servers,omitempty"`
+	Tokens              int64              `json:"tokens"`
+	Sources             []string           `json:"sources"`
+	InvalidLocations    []InvalidLocation  `json:"-" yaml:"-"`                     // WO-72: aggregate into ScanResult without emitting invalid-only agents
+	Enforcement         EnforcementPosture `json:"enforcement"`                    // WO-77: evidence-backed enforcement posture
+	Evidence            []EvidenceItem     `json:"evidence,omitempty"`             // WO-77: structured posture evidence
+	Warning             string             `json:"warning,omitempty"`              // WO-77: evidence-quality caveat for advisory agents
+	EnforcementEvidence string             `json:"enforcement_evidence,omitempty"` // WO-77: legacy evidence summary
+	Advisory            bool               `json:"advisory"`                       // WO-77: deprecated alias for Enforcement==advisory
 }
 
 // NormalizeEnforcement applies the evidence requirement and legacy alias.
 func (r *AgentResult) NormalizeEnforcement() {
 	r.EnforcementEvidence = strings.TrimSpace(r.EnforcementEvidence)
+	r.Warning = strings.TrimSpace(r.Warning)
+	for i := range r.Evidence {
+		r.Evidence[i].Kind = EvidenceKind(strings.TrimSpace(string(r.Evidence[i].Kind)))
+		r.Evidence[i].Note = strings.TrimSpace(r.Evidence[i].Note)
+	}
+
 	switch r.Enforcement {
 	case EnforcementEnforcing, EnforcementAdvisory:
-		if r.EnforcementEvidence == "" {
+		if !hasValidEnforcementEvidence(r.Evidence) {
 			r.Enforcement = EnforcementUnverified
 		}
 	case EnforcementUnverified, "":
@@ -121,7 +167,37 @@ func (r *AgentResult) NormalizeEnforcement() {
 		r.Enforcement = EnforcementUnverified
 		r.EnforcementEvidence = ""
 	}
+	if r.Enforcement != EnforcementUnverified && r.EnforcementEvidence == "" {
+		r.EnforcementEvidence = enforcementEvidenceSummary(r.Evidence)
+	}
 	r.Advisory = r.Enforcement == EnforcementAdvisory
+}
+
+func hasValidEnforcementEvidence(evidence []EvidenceItem) bool {
+	for _, item := range evidence {
+		if item.Note == "" {
+			continue
+		}
+		switch item.Kind {
+		case EvidenceRealToolResult, EvidenceUnfakeableOutput:
+			return true
+		}
+	}
+	return false
+}
+
+func enforcementEvidenceSummary(evidence []EvidenceItem) string {
+	var notes []string
+	for _, item := range evidence {
+		if item.Note == "" {
+			continue
+		}
+		switch item.Kind {
+		case EvidenceRealToolResult, EvidenceUnfakeableOutput:
+			notes = append(notes, item.Note)
+		}
+	}
+	return strings.Join(notes, "; ")
 }
 
 // ANCCProduct holds ANCC product SKILL.md info if present.

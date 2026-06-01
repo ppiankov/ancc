@@ -63,8 +63,6 @@ const (
 	skillsEnforcementWidth = 10
 	skillsTokenWidth       = 10
 	skillsBudgetWidth      = 8
-	advisoryCaution        = "config is advisory only"
-	advisoryMitigation     = "config does not enforce reads; bound via external sandbox or route sensitive work elsewhere"
 )
 
 func formatSkillsText(w io.Writer, result *skills.ScanResult, showTokens bool, budget int) {
@@ -137,7 +135,7 @@ func formatSkillsText(w io.Writer, result *skills.ScanResult, showTokens bool, b
 }
 
 // WO-78: keep posture rendering evidence-based and non-blocking.
-func agentEnforcement(a skills.AgentResult) skills.Enforcement {
+func agentEnforcement(a skills.AgentResult) skills.EnforcementPosture {
 	switch a.Enforcement {
 	case skills.EnforcementEnforcing, skills.EnforcementAdvisory, skills.EnforcementUnverified:
 		return a.Enforcement
@@ -154,11 +152,41 @@ func writeSkillsAdvisoryCautions(w io.Writer, agents []skills.AgentResult) {
 		}
 		if !wroteHeader {
 			_, _ = fmt.Fprintln(w)
-			_, _ = fmt.Fprintln(w, "  Cautions:")
+			_, _ = fmt.Fprintln(w, "  Warnings:")
 			wroteHeader = true
 		}
-		_, _ = fmt.Fprintf(w, "  %-*s caution: %s; evidence: %s; mitigation: %s\n",
-			skillsAgentWidth, a.Name, advisoryCaution, a.EnforcementEvidence, advisoryMitigation)
+		writeAdvisoryWarningBlock(w, a.Name, a.Warning)
+	}
+}
+
+func writeAdvisoryWarningBlock(w io.Writer, name, warning string) {
+	displayName := agentDisplayName(name)
+	if warning == "" {
+		warning = skills.SecurityProbeSelfReportWarning
+	}
+
+	_, _ = fmt.Fprintf(w, "  %-*s %s  (warning)\n",
+		skillsAgentWidth, name, strings.ToUpper(string(skills.EnforcementAdvisory)))
+	if name == skills.AgentAntigravity {
+		_, _ = fmt.Fprintf(w, "    %s's workspace trust is not an enforcement boundary.\n", displayName)
+		_, _ = fmt.Fprintln(w, "    Live probes show it can read outside the declared workspace when the OS allows it.")
+		_, _ = fmt.Fprintln(w, "    Do not rely on agent self-reports as proof of access or enforcement:")
+		_, _ = fmt.Fprintln(w, "    a headless YES/NO probe reported success for a TCC-blocked file, but an actual read failed with Operation not permitted.")
+	} else {
+		_, _ = fmt.Fprintf(w, "    %s has advisory guardrails, not an enforcement boundary.\n", displayName)
+		_, _ = fmt.Fprintf(w, "    %s.\n", strings.TrimSuffix(warning, "."))
+	}
+	_, _ = fmt.Fprintln(w, "    Evidence standard:")
+	_, _ = fmt.Fprintf(w, "      valid:   %s\n", strings.Join(skills.ValidEvidenceStandard, ", "))
+	_, _ = fmt.Fprintf(w, "      invalid: %s\n", strings.Join(skills.InvalidEvidenceStandard, ", "))
+}
+
+func agentDisplayName(name string) string {
+	switch name {
+	case skills.AgentAntigravity:
+		return "Antigravity"
+	default:
+		return name
 	}
 }
 

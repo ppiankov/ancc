@@ -131,14 +131,13 @@ func TestFormatSkillsTextShowsInvalidLocations(t *testing.T) {
 }
 
 func TestFormatSkillsTextShowsEnforcementPosture(t *testing.T) {
-	evidence := "live probe finding: trusted workspace policy is informational"
 	result := &skills.ScanResult{
 		Agents: []skills.AgentResult{
 			{
-				Name:                skills.AgentAntigravity,
-				Enforcement:         skills.EnforcementAdvisory,
-				EnforcementEvidence: evidence,
-				Sources:             []string{"AGENTS.md"},
+				Name:        skills.AgentAntigravity,
+				Enforcement: skills.EnforcementAdvisory,
+				Warning:     skills.SecurityProbeSelfReportWarning,
+				Sources:     []string{"AGENTS.md"},
 			},
 			{
 				Name:        skills.AgentCline,
@@ -156,8 +155,10 @@ func TestFormatSkillsTextShowsEnforcementPosture(t *testing.T) {
 		"Posture",
 		skills.AgentAntigravity,
 		string(skills.EnforcementAdvisory),
-		evidence,
-		advisoryMitigation,
+		"Antigravity's workspace trust is not an enforcement boundary.",
+		"agent self-reports as proof of access or enforcement",
+		"valid:   real OS result, real tool error, unfakeable payload",
+		"invalid: vendor docs, agent says \"YES\", model explanation",
 		skills.AgentCline,
 		string(skills.EnforcementUnverified),
 	} {
@@ -166,21 +167,24 @@ func TestFormatSkillsTextShowsEnforcementPosture(t *testing.T) {
 		}
 	}
 	for _, line := range strings.Split(output, "\n") {
-		if strings.Contains(line, skills.AgentCline) && strings.Contains(line, "caution:") {
-			t.Errorf("unverified cline line should not include caution: %q", line)
+		if strings.Contains(line, skills.AgentCline) && strings.Contains(line, "warning") {
+			t.Errorf("unverified cline line should not include warning: %q", line)
 		}
 	}
 }
 
 func TestFormatSkillsJSONIncludesEnforcementPosture(t *testing.T) {
-	evidence := "live probe finding: trusted workspace policy is informational"
+	evidence := []skills.EvidenceItem{
+		{Kind: skills.EvidenceRealToolResult, Note: "trustedWorkspaces does not confine reads to workspace"},
+	}
 	result := &skills.ScanResult{
 		Path: "/tmp/project",
 		Agents: []skills.AgentResult{
 			{
-				Name:                skills.AgentAntigravity,
-				Enforcement:         skills.EnforcementAdvisory,
-				EnforcementEvidence: evidence,
+				Name:        skills.AgentAntigravity,
+				Enforcement: skills.EnforcementAdvisory,
+				Evidence:    evidence,
+				Warning:     skills.SecurityProbeSelfReportWarning,
 			},
 		},
 	}
@@ -192,9 +196,10 @@ func TestFormatSkillsJSONIncludesEnforcementPosture(t *testing.T) {
 
 	var raw struct {
 		Agents []struct {
-			Name                string             `json:"name"`
-			Enforcement         skills.Enforcement `json:"enforcement"`
-			EnforcementEvidence string             `json:"enforcement_evidence"`
+			Name        string                `json:"name"`
+			Enforcement skills.Enforcement    `json:"enforcement"`
+			Evidence    []skills.EvidenceItem `json:"evidence"`
+			Warning     string                `json:"warning"`
 		} `json:"agents"`
 	}
 	if err := json.Unmarshal(buf.Bytes(), &raw); err != nil {
@@ -206,8 +211,11 @@ func TestFormatSkillsJSONIncludesEnforcementPosture(t *testing.T) {
 	if raw.Agents[0].Enforcement != skills.EnforcementAdvisory {
 		t.Fatalf("enforcement = %q, want %q", raw.Agents[0].Enforcement, skills.EnforcementAdvisory)
 	}
-	if raw.Agents[0].EnforcementEvidence != evidence {
-		t.Fatalf("evidence = %q, want %q", raw.Agents[0].EnforcementEvidence, evidence)
+	if len(raw.Agents[0].Evidence) != 1 || raw.Agents[0].Evidence[0] != evidence[0] {
+		t.Fatalf("evidence = %+v, want %+v", raw.Agents[0].Evidence, evidence)
+	}
+	if raw.Agents[0].Warning != skills.SecurityProbeSelfReportWarning {
+		t.Fatalf("warning = %q, want %q", raw.Agents[0].Warning, skills.SecurityProbeSelfReportWarning)
 	}
 }
 

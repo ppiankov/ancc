@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -127,7 +128,9 @@ func TestRunDoctor_GitHubAPIUnreachable(t *testing.T) {
 }
 
 func TestRunDoctor_AgentPosture(t *testing.T) {
-	evidence := "live probe finding: trusted workspace policy is informational"
+	evidence := []skills.EvidenceItem{
+		{Kind: skills.EvidenceRealToolResult, Note: "trustedWorkspaces does not confine reads to workspace"},
+	}
 	env := fakeEnv("1.0.0")
 	env.scanAgents = func(path string) (*skills.ScanResult, error) {
 		if path != "." {
@@ -136,9 +139,10 @@ func TestRunDoctor_AgentPosture(t *testing.T) {
 		return &skills.ScanResult{
 			Agents: []skills.AgentResult{
 				{
-					Name:                skills.AgentAntigravity,
-					Enforcement:         skills.EnforcementAdvisory,
-					EnforcementEvidence: evidence,
+					Name:        skills.AgentAntigravity,
+					Enforcement: skills.EnforcementAdvisory,
+					Evidence:    evidence,
+					Warning:     skills.SecurityProbeSelfReportWarning,
 				},
 				{
 					Name:        skills.AgentCline,
@@ -160,22 +164,19 @@ func TestRunDoctor_AgentPosture(t *testing.T) {
 	if antigravity.Enforcement != skills.EnforcementAdvisory {
 		t.Fatalf("antigravity enforcement = %q, want %q", antigravity.Enforcement, skills.EnforcementAdvisory)
 	}
-	if antigravity.EnforcementEvidence != evidence {
-		t.Fatalf("antigravity evidence = %q, want %q", antigravity.EnforcementEvidence, evidence)
+	if !reflect.DeepEqual(antigravity.Evidence, evidence) {
+		t.Fatalf("antigravity evidence = %+v, want %+v", antigravity.Evidence, evidence)
 	}
-	if antigravity.Caution != advisoryCaution {
-		t.Fatalf("antigravity caution = %q, want %q", antigravity.Caution, advisoryCaution)
-	}
-	if antigravity.Mitigation != advisoryMitigation {
-		t.Fatalf("antigravity mitigation = %q, want %q", antigravity.Mitigation, advisoryMitigation)
+	if antigravity.Warning != skills.SecurityProbeSelfReportWarning {
+		t.Fatalf("antigravity warning = %q, want %q", antigravity.Warning, skills.SecurityProbeSelfReportWarning)
 	}
 
 	cline := result.Agents[1]
 	if cline.Enforcement != skills.EnforcementUnverified {
 		t.Fatalf("cline enforcement = %q, want %q", cline.Enforcement, skills.EnforcementUnverified)
 	}
-	if cline.Caution != "" || cline.Mitigation != "" || cline.EnforcementEvidence != "" {
-		t.Fatalf("unverified agent should not carry caution/evidence/mitigation: %+v", cline)
+	if cline.Warning != "" || cline.EnforcementEvidence != "" || len(cline.Evidence) != 0 {
+		t.Fatalf("unverified agent should not carry warning/evidence: %+v", cline)
 	}
 }
 
@@ -286,7 +287,6 @@ func TestDoctorCmd_TextOutput(t *testing.T) {
 }
 
 func TestFormatDoctorTextShowsAgentPosture(t *testing.T) {
-	evidence := "probe citation"
 	result := &DoctorResult{
 		Status: doctorOK,
 		Checks: []DoctorCheck{
@@ -294,11 +294,9 @@ func TestFormatDoctorTextShowsAgentPosture(t *testing.T) {
 		},
 		Agents: []DoctorAgentPosture{
 			{
-				Name:                skills.AgentAntigravity,
-				Enforcement:         skills.EnforcementAdvisory,
-				EnforcementEvidence: evidence,
-				Caution:             advisoryCaution,
-				Mitigation:          advisoryMitigation,
+				Name:        skills.AgentAntigravity,
+				Enforcement: skills.EnforcementAdvisory,
+				Warning:     skills.SecurityProbeSelfReportWarning,
 			},
 			{
 				Name:        skills.AgentCline,
@@ -315,8 +313,10 @@ func TestFormatDoctorTextShowsAgentPosture(t *testing.T) {
 		"Agent enforcement:",
 		skills.AgentAntigravity,
 		string(skills.EnforcementAdvisory),
-		evidence,
-		advisoryMitigation,
+		"Antigravity's workspace trust is not an enforcement boundary.",
+		"agent self-reports as proof of access or enforcement",
+		"valid:   real OS result, real tool error, unfakeable payload",
+		"invalid: vendor docs, agent says \"YES\", model explanation",
 		skills.AgentCline,
 		string(skills.EnforcementUnverified),
 	} {
@@ -325,8 +325,8 @@ func TestFormatDoctorTextShowsAgentPosture(t *testing.T) {
 		}
 	}
 	for _, line := range strings.Split(out, "\n") {
-		if strings.Contains(line, skills.AgentCline) && strings.Contains(line, "caution:") {
-			t.Errorf("unverified cline line should not include caution: %q", line)
+		if strings.Contains(line, skills.AgentCline) && strings.Contains(line, "warning") {
+			t.Errorf("unverified cline line should not include warning: %q", line)
 		}
 	}
 }

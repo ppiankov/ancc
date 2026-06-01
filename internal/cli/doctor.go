@@ -33,11 +33,13 @@ type DoctorResult struct {
 //
 // WO-78: doctor exposes posture evidence without failing advisory agents.
 type DoctorAgentPosture struct {
-	Name                string             `json:"name"`
-	Enforcement         skills.Enforcement `json:"enforcement"`
-	EnforcementEvidence string             `json:"enforcement_evidence,omitempty"`
-	Caution             string             `json:"caution,omitempty"`
-	Mitigation          string             `json:"mitigation,omitempty"`
+	Name                string                `json:"name"`
+	Enforcement         skills.Enforcement    `json:"enforcement"`
+	EnforcementEvidence string                `json:"enforcement_evidence,omitempty"`
+	Evidence            []skills.EvidenceItem `json:"evidence,omitempty"` // WO-77: structured evidence items
+	Warning             string                `json:"warning,omitempty"`  // WO-78: advisory evidence-quality warning
+	Caution             string                `json:"caution,omitempty"`
+	Mitigation          string                `json:"mitigation,omitempty"`
 }
 
 const (
@@ -162,10 +164,8 @@ func checkAgentPosture(env *doctorEnv) []DoctorAgentPosture {
 			Name:                a.Name,
 			Enforcement:         agentEnforcement(a),
 			EnforcementEvidence: a.EnforcementEvidence,
-		}
-		if entry.Enforcement == skills.EnforcementAdvisory {
-			entry.Caution = advisoryCaution
-			entry.Mitigation = advisoryMitigation
+			Evidence:            a.Evidence,
+			Warning:             a.Warning,
 		}
 		posture = append(posture, entry)
 	}
@@ -306,9 +306,8 @@ func formatDoctorText(w io.Writer, result *DoctorResult) {
 				skillsAgentWidth, a.Name,
 				skillsEnforcementWidth, a.Enforcement,
 			)
-			if a.Caution != "" {
-				_, _ = fmt.Fprintf(w, "  %-*s caution: %s; evidence: %s; mitigation: %s\n",
-					skillsAgentWidth, a.Name, a.Caution, a.EnforcementEvidence, a.Mitigation)
+			if a.Enforcement == skills.EnforcementAdvisory {
+				writeAdvisoryWarningBlock(w, a.Name, a.Warning)
 			}
 		}
 	}

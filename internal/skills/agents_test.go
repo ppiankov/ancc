@@ -325,14 +325,22 @@ func TestAllAgents(t *testing.T) {
 			if result.Advisory != expectedAdvisory {
 				t.Errorf("Expected advisory %v, got %v", expectedAdvisory, result.Advisory)
 			}
-			if tc.name != "Antigravity" && result.EnforcementEvidence != "" {
-				t.Errorf("Expected no enforcement evidence for %s, got %q", tc.name, result.EnforcementEvidence)
+			if tc.name != "Antigravity" {
+				if result.EnforcementEvidence != "" {
+					t.Errorf("Expected no enforcement evidence for %s, got %q", tc.name, result.EnforcementEvidence)
+				}
+				if len(result.Evidence) != 0 {
+					t.Errorf("Expected no structured evidence for %s, got %+v", tc.name, result.Evidence)
+				}
+				if result.Warning != "" {
+					t.Errorf("Expected no warning for %s, got %q", tc.name, result.Warning)
+				}
 			}
 		})
 	}
 }
 
-// WO-77: enforcing/advisory posture requires evidence and otherwise normalizes.
+// WO-77: enforcing/advisory posture requires valid probe evidence and otherwise normalizes.
 func TestNormalizeEnforcementRequiresEvidence(t *testing.T) {
 	result := AgentResult{Enforcement: EnforcementAdvisory}
 	result.NormalizeEnforcement()
@@ -343,10 +351,30 @@ func TestNormalizeEnforcementRequiresEvidence(t *testing.T) {
 		t.Errorf("Expected advisory alias to be false after normalization")
 	}
 
-	result = AgentResult{Enforcement: EnforcementEnforcing, EnforcementEvidence: "   "}
+	result = AgentResult{
+		Enforcement: EnforcementEnforcing,
+		Evidence: []EvidenceItem{
+			{Kind: EvidenceVendorDocs, Note: "vendor docs claim secure mode"},
+			{Kind: EvidenceAgentSelfReport, Note: "agent said YES"},
+		},
+	}
 	result.NormalizeEnforcement()
 	if result.Enforcement != EnforcementUnverified {
-		t.Errorf("Expected enforcing without evidence to normalize to unverified, got %q", result.Enforcement)
+		t.Errorf("Expected enforcing with invalid evidence kinds to normalize to unverified, got %q", result.Enforcement)
+	}
+
+	result = AgentResult{
+		Enforcement: EnforcementAdvisory,
+		Evidence: []EvidenceItem{
+			{Kind: EvidenceRealToolResult, Note: "read outside workspace returned a real payload"},
+		},
+	}
+	result.NormalizeEnforcement()
+	if result.Enforcement != EnforcementAdvisory {
+		t.Errorf("Expected advisory with real-tool evidence to stay advisory, got %q", result.Enforcement)
+	}
+	if result.EnforcementEvidence != "read outside workspace returned a real payload" {
+		t.Errorf("Expected legacy evidence summary, got %q", result.EnforcementEvidence)
 	}
 }
 
@@ -403,8 +431,20 @@ func TestScanAntigravity(t *testing.T) {
 	if result.Enforcement != EnforcementAdvisory {
 		t.Errorf("Expected enforcement %q, got %q", EnforcementAdvisory, result.Enforcement)
 	}
-	if result.EnforcementEvidence != antigravityEnforcementEvidence {
+	if result.EnforcementEvidence != enforcementEvidenceSummary(antigravityEvidence) {
 		t.Errorf("Expected antigravity enforcement evidence, got %q", result.EnforcementEvidence)
+	}
+	if len(result.Evidence) != 3 {
+		t.Fatalf("Expected 3 evidence items, got %d", len(result.Evidence))
+	}
+	expectedKinds := []EvidenceKind{EvidenceRealToolResult, EvidenceUnfakeableOutput, EvidenceAgentSelfReport}
+	for i, want := range expectedKinds {
+		if result.Evidence[i].Kind != want {
+			t.Errorf("Expected evidence kind %q at %d, got %q", want, i, result.Evidence[i].Kind)
+		}
+	}
+	if result.Warning != SecurityProbeSelfReportWarning {
+		t.Errorf("Expected warning %q, got %q", SecurityProbeSelfReportWarning, result.Warning)
 	}
 	if result.ConfigDir != "~/.gemini/antigravity-cli" {
 		t.Errorf("Expected config_dir ~/.gemini/antigravity-cli, got %s", result.ConfigDir)
@@ -431,7 +471,10 @@ func TestScanAntigravity(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to marshal result: %v", err)
 	}
-	if !jsonFieldExists(encoded, "enforcement") || !jsonFieldExists(encoded, "enforcement_evidence") {
+	if !jsonFieldExists(encoded, "enforcement") ||
+		!jsonFieldExists(encoded, "enforcement_evidence") ||
+		!jsonFieldExists(encoded, "evidence") ||
+		!jsonFieldExists(encoded, "warning") {
 		t.Errorf("Expected JSON output to include enforcement fields: %s", encoded)
 	}
 	expectedInvalid := []string{

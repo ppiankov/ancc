@@ -9,17 +9,32 @@ import (
 
 const (
 	missingRequiredSkillFileReasonPrefix = "missing required file "
-	antigravityEnforcementEvidence       = "live probe finding: trusted workspace policy is informational for reads; only macOS TCC enforces a narrow folder set, leaving credential directories reachable"
 )
+
+var antigravityEvidence = []EvidenceItem{
+	{
+		Kind: EvidenceRealToolResult,
+		Note: "trustedWorkspaces does not confine reads to workspace",
+	},
+	{
+		Kind: EvidenceUnfakeableOutput,
+		Note: "outside-workspace /tmp read returned a UUID-verified probe payload",
+	},
+	{
+		Kind: EvidenceAgentSelfReport,
+		Note: "YES/NO self-report probes are unreliable: agy hallucinated success for a TCC-blocked file",
+	},
+}
 
 // agentPathSpec defines the configuration for scanning an agent's files.
 type agentPathSpec struct {
-	Name                AgentName
-	Enforcement         Enforcement
-	EnforcementEvidence string
-	ConfigDir           string
-	Home                []pathSpec
-	Project             []pathSpec
+	Name        AgentName
+	Enforcement Enforcement
+	Evidence    []EvidenceItem
+	Warning     string
+	ConfigDir   string
+	Home        []pathSpec
+	Project     []pathSpec
 }
 
 type pathSpec struct {
@@ -141,9 +156,10 @@ func customDirProject(path, comment string) pathSpec {
 
 func scanAgentPaths(projectDir, homeDir string, spec agentPathSpec) AgentResult {
 	r := AgentResult{
-		Name:                spec.Name,
-		Enforcement:         spec.Enforcement,
-		EnforcementEvidence: spec.EnforcementEvidence,
+		Name:        spec.Name,
+		Enforcement: spec.Enforcement,
+		Evidence:    append([]EvidenceItem(nil), spec.Evidence...),
+		Warning:     spec.Warning,
 	}
 
 	// Set config_dir from home directory paths
@@ -752,15 +768,16 @@ func scanGoose(projectDir, homeDir string) AgentResult {
 	return scanAgentPaths(projectDir, homeDir, spec)
 }
 
-// WO-77: Antigravity guardrails are verified advisory, not read-enforcing.
+// WO-77: Antigravity posture is based on real probes, not agent self-report.
 func scanAntigravity(projectDir, homeDir string) AgentResult {
 	const antigravitySkillFile = "SKILL.md"
 
 	spec := agentPathSpec{
-		Name:                AgentAntigravity,
-		Enforcement:         EnforcementAdvisory,
-		EnforcementEvidence: antigravityEnforcementEvidence,
-		ConfigDir:           ".gemini/antigravity-cli",
+		Name:        AgentAntigravity,
+		Enforcement: EnforcementAdvisory,
+		Evidence:    antigravityEvidence,
+		Warning:     SecurityProbeSelfReportWarning,
+		ConfigDir:   ".gemini/antigravity-cli",
 		Home: []pathSpec{
 			fileHome(".gemini/GEMINI.md", "(advisory)"),
 			skillDirHomeRequiredFile(".gemini/antigravity-cli/skills", antigravitySkillFile, "(advisory)"),
