@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-06-01
+
 ### Added
 
 - Antigravity advisory scanner support in `ancc skills`, bringing detected agents from 14 to 15
