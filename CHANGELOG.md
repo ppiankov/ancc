@@ -6,6 +6,10 @@
 
 - Antigravity advisory scanner support in `ancc skills`, bringing detected agents from 14 to 15
 - Invalid or rejected Antigravity scan locations are surfaced in text, JSON, and export output, including `--agent` filtering
+- Per-agent enforcement posture in `ancc skills` and `ancc doctor`, using `enforcing`, `advisory`, and `unverified`
+- Advisory posture evidence-quality warnings that teach valid probe evidence versus invalid vendor docs or agent self-reports, without changing exit codes
+- Structured `enforcement`, `evidence`, and `warning` fields in `--format json` output
+- `enforcement-provenance` governed convention under the Execution surface, bringing conventions from 8 to 9
 
 ### Fixed
 
