@@ -112,7 +112,7 @@ func formatSkillsText(w io.Writer, result *skills.ScanResult, showTokens bool, b
 			_, _ = fmt.Fprintf(w, " %s\n", sources)
 		}
 
-		writeSkillsAdvisoryCautions(w, result.Agents)
+		writeSkillsPostureDetails(w, result.Agents)
 	}
 
 	if len(result.InvalidLocations) > 0 {
@@ -144,7 +144,7 @@ func agentEnforcement(a skills.AgentResult) skills.EnforcementPosture {
 	}
 }
 
-func writeSkillsAdvisoryCautions(w io.Writer, agents []skills.AgentResult) {
+func writeSkillsPostureDetails(w io.Writer, agents []skills.AgentResult) {
 	wroteHeader := false
 	for _, a := range agents {
 		if agentEnforcement(a) != skills.EnforcementAdvisory {
@@ -156,6 +156,22 @@ func writeSkillsAdvisoryCautions(w io.Writer, agents []skills.AgentResult) {
 			wroteHeader = true
 		}
 		writeAdvisoryWarningBlock(w, a.Name, a.Warning)
+	}
+
+	wroteHeader = false
+	for _, a := range agents {
+		if agentEnforcement(a) != skills.EnforcementEnforcing {
+			continue
+		}
+		if enforcementEvidenceCitation(a.EnforcementEvidence, a.Evidence) == "" {
+			continue
+		}
+		if !wroteHeader {
+			_, _ = fmt.Fprintln(w)
+			_, _ = fmt.Fprintln(w, "  Evidence:")
+			wroteHeader = true
+		}
+		writeEnforcingEvidenceBlock(w, a.Name, a.EnforcementEvidence, a.Evidence)
 	}
 }
 
@@ -179,6 +195,36 @@ func writeAdvisoryWarningBlock(w io.Writer, name, warning string) {
 	_, _ = fmt.Fprintln(w, "    Evidence standard:")
 	_, _ = fmt.Fprintf(w, "      valid:   %s\n", strings.Join(skills.ValidEvidenceStandard, ", "))
 	_, _ = fmt.Fprintf(w, "      invalid: %s\n", strings.Join(skills.InvalidEvidenceStandard, ", "))
+}
+
+// WO-78: enforcing posture is plain, but still cites the probe evidence.
+func writeEnforcingEvidenceBlock(w io.Writer, name, evidence string, items []skills.EvidenceItem) {
+	citation := enforcementEvidenceCitation(evidence, items)
+	if citation == "" {
+		return
+	}
+	_, _ = fmt.Fprintf(w, "  %-*s %s\n",
+		skillsAgentWidth, name, strings.ToUpper(string(skills.EnforcementEnforcing)))
+	_, _ = fmt.Fprintf(w, "    evidence: %s\n", citation)
+}
+
+func enforcementEvidenceCitation(evidence string, items []skills.EvidenceItem) string {
+	if citation := strings.TrimSpace(evidence); citation != "" {
+		return citation
+	}
+
+	var notes []string
+	for _, item := range items {
+		note := strings.TrimSpace(item.Note)
+		if note == "" {
+			continue
+		}
+		switch item.Kind {
+		case skills.EvidenceRealToolResult, skills.EvidenceUnfakeableOutput:
+			notes = append(notes, note)
+		}
+	}
+	return strings.Join(notes, "; ")
 }
 
 func agentDisplayName(name string) string {

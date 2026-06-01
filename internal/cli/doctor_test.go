@@ -302,6 +302,13 @@ func TestFormatDoctorTextShowsAgentPosture(t *testing.T) {
 				Name:        skills.AgentCline,
 				Enforcement: skills.EnforcementUnverified,
 			},
+			{
+				Name:        skills.AgentCodex,
+				Enforcement: skills.EnforcementEnforcing,
+				Evidence: []skills.EvidenceItem{
+					{Kind: skills.EvidenceUnfakeableOutput, Note: "sandbox denied write with a real tool error"},
+				},
+			},
 		},
 	}
 
@@ -319,6 +326,9 @@ func TestFormatDoctorTextShowsAgentPosture(t *testing.T) {
 		"invalid: vendor docs, agent says \"YES\", model explanation",
 		skills.AgentCline,
 		string(skills.EnforcementUnverified),
+		skills.AgentCodex,
+		string(skills.EnforcementEnforcing),
+		"sandbox denied write with a real tool error",
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("expected output to contain %q; got: %s", want, out)

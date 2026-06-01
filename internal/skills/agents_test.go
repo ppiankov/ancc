@@ -350,9 +350,13 @@ func TestNormalizeEnforcementRequiresEvidence(t *testing.T) {
 	if result.Advisory {
 		t.Errorf("Expected advisory alias to be false after normalization")
 	}
+	if len(result.Evidence) != 0 || result.Warning != "" || result.EnforcementEvidence != "" {
+		t.Errorf("Expected advisory without evidence to normalize to plain unverified, got %+v", result)
+	}
 
 	result = AgentResult{
 		Enforcement: EnforcementEnforcing,
+		Warning:     SecurityProbeSelfReportWarning,
 		Evidence: []EvidenceItem{
 			{Kind: EvidenceVendorDocs, Note: "vendor docs claim secure mode"},
 			{Kind: EvidenceAgentSelfReport, Note: "agent said YES"},
@@ -362,9 +366,28 @@ func TestNormalizeEnforcementRequiresEvidence(t *testing.T) {
 	if result.Enforcement != EnforcementUnverified {
 		t.Errorf("Expected enforcing with invalid evidence kinds to normalize to unverified, got %q", result.Enforcement)
 	}
+	if len(result.Evidence) != 0 || result.Warning != "" || result.EnforcementEvidence != "" {
+		t.Errorf("Expected invalid-only evidence to normalize to plain unverified, got %+v", result)
+	}
+
+	result = AgentResult{
+		Enforcement: EnforcementUnverified,
+		Warning:     SecurityProbeSelfReportWarning,
+		Evidence: []EvidenceItem{
+			{Kind: EvidenceAgentSelfReport, Note: "agent said YES"},
+		},
+	}
+	result.NormalizeEnforcement()
+	if result.Enforcement != EnforcementUnverified {
+		t.Errorf("Expected explicit unverified to stay unverified, got %q", result.Enforcement)
+	}
+	if len(result.Evidence) != 0 || result.Warning != "" || result.EnforcementEvidence != "" {
+		t.Errorf("Expected explicit unverified to normalize to plain state, got %+v", result)
+	}
 
 	result = AgentResult{
 		Enforcement: EnforcementAdvisory,
+		Warning:     SecurityProbeSelfReportWarning,
 		Evidence: []EvidenceItem{
 			{Kind: EvidenceRealToolResult, Note: "read outside workspace returned a real payload"},
 		},
@@ -375,6 +398,9 @@ func TestNormalizeEnforcementRequiresEvidence(t *testing.T) {
 	}
 	if result.EnforcementEvidence != "read outside workspace returned a real payload" {
 		t.Errorf("Expected legacy evidence summary, got %q", result.EnforcementEvidence)
+	}
+	if result.Warning != SecurityProbeSelfReportWarning || !result.Advisory || len(result.Evidence) != 1 {
+		t.Errorf("Expected valid advisory evidence and warning to remain, got %+v", result)
 	}
 }
 

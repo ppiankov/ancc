@@ -66,10 +66,13 @@ The two conventions compose: an enforcement posture field can still carry ordina
 field provenance.
 
 Worked example: agy exposes policy-profile and secure-mode style configuration.
-A live probe found that the project policy was advisory for file reads: macOS TCC
-blocked a narrow set of user folders, while credential directories remained
-reachable. The correct posture is `advisory`, with that probe attached as
-evidence. Without the probe, the posture is `unverified`, not `enforcing`.
+A live probe found that workspace trust did not confine reads to the declared
+workspace when the OS allowed the read, while a separate YES/NO self-report was
+rejected because it claimed success for an access attempt that a real tool call
+could not perform. The correct posture is `advisory` only when supported by the
+real tool result or an unfakeable payload; vendor docs and agent self-reports do
+not justify the posture. Without valid probe evidence, the posture is
+`unverified`, not `enforcing`.
 
 Validator: pending. The convention is vocabulary and reporting contract first;
 validator enforcement belongs in a separate implementation change.

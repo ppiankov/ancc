@@ -170,6 +170,12 @@ func (r *AgentResult) NormalizeEnforcement() {
 	if r.Enforcement != EnforcementUnverified && r.EnforcementEvidence == "" {
 		r.EnforcementEvidence = enforcementEvidenceSummary(r.Evidence)
 	}
+	if r.Enforcement == EnforcementUnverified {
+		// WO-82: unverified posture must stay plain in structured output.
+		r.Evidence = nil
+		r.Warning = ""
+		r.EnforcementEvidence = ""
+	}
 	r.Advisory = r.Enforcement == EnforcementAdvisory
 }
 

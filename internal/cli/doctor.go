@@ -306,8 +306,11 @@ func formatDoctorText(w io.Writer, result *DoctorResult) {
 				skillsAgentWidth, a.Name,
 				skillsEnforcementWidth, a.Enforcement,
 			)
-			if a.Enforcement == skills.EnforcementAdvisory {
+			switch a.Enforcement {
+			case skills.EnforcementAdvisory:
 				writeAdvisoryWarningBlock(w, a.Name, a.Warning)
+			case skills.EnforcementEnforcing:
+				writeEnforcingEvidenceBlock(w, a.Name, a.EnforcementEvidence, a.Evidence)
 			}
 		}
 	}

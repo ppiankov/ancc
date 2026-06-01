@@ -144,6 +144,14 @@ func TestFormatSkillsTextShowsEnforcementPosture(t *testing.T) {
 				Enforcement: skills.EnforcementUnverified,
 				Sources:     []string{".clinerules/"},
 			},
+			{
+				Name:        skills.AgentCodex,
+				Enforcement: skills.EnforcementEnforcing,
+				Evidence: []skills.EvidenceItem{
+					{Kind: skills.EvidenceRealToolResult, Note: "policy blocked a real write attempt"},
+				},
+				Sources: []string{"~/.codex/AGENTS.md"},
+			},
 		},
 	}
 
@@ -161,6 +169,9 @@ func TestFormatSkillsTextShowsEnforcementPosture(t *testing.T) {
 		"invalid: vendor docs, agent says \"YES\", model explanation",
 		skills.AgentCline,
 		string(skills.EnforcementUnverified),
+		skills.AgentCodex,
+		string(skills.EnforcementEnforcing),
+		"policy blocked a real write attempt",
 	} {
 		if !strings.Contains(output, want) {
 			t.Errorf("expected output to contain %q; got: %s", want, output)
@@ -170,6 +181,51 @@ func TestFormatSkillsTextShowsEnforcementPosture(t *testing.T) {
 		if strings.Contains(line, skills.AgentCline) && strings.Contains(line, "warning") {
 			t.Errorf("unverified cline line should not include warning: %q", line)
 		}
+	}
+}
+
+func TestFormatSkillsJSONOmitsPlainUnverifiedDetails(t *testing.T) {
+	agent := skills.AgentResult{
+		Name:        skills.AgentCodex,
+		Enforcement: skills.EnforcementAdvisory,
+		Warning:     skills.SecurityProbeSelfReportWarning,
+		Evidence: []skills.EvidenceItem{
+			{Kind: skills.EvidenceVendorDocs, Note: "vendor docs claim secure mode"},
+			{Kind: skills.EvidenceAgentSelfReport, Note: "agent said YES"},
+		},
+	}
+	agent.NormalizeEnforcement()
+
+	result := &skills.ScanResult{
+		Path:   "/tmp/project",
+		Agents: []skills.AgentResult{agent},
+	}
+
+	buf := new(bytes.Buffer)
+	if err := formatSkillsJSON(buf, result, 0); err != nil {
+		t.Fatalf("formatSkillsJSON returned error: %v", err)
+	}
+
+	var raw struct {
+		Agents []struct {
+			Name        string             `json:"name"`
+			Enforcement skills.Enforcement `json:"enforcement"`
+			Evidence    json.RawMessage    `json:"evidence"`
+			Warning     string             `json:"warning"`
+		} `json:"agents"`
+	}
+	if err := json.Unmarshal(buf.Bytes(), &raw); err != nil {
+		t.Fatalf("invalid JSON: %v\nraw: %s", err, buf.String())
+	}
+	if len(raw.Agents) != 1 {
+		t.Fatalf("agents = %d, want 1", len(raw.Agents))
+	}
+	if raw.Agents[0].Enforcement != skills.EnforcementUnverified {
+		t.Fatalf("enforcement = %q, want %q", raw.Agents[0].Enforcement, skills.EnforcementUnverified)
+	}
+	if len(raw.Agents[0].Evidence) != 0 || raw.Agents[0].Warning != "" {
+		t.Fatalf("plain unverified JSON should omit evidence/warning, got raw=%s warning=%q",
+			raw.Agents[0].Evidence, raw.Agents[0].Warning)
 	}
 }
 
