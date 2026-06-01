@@ -7,15 +7,19 @@ import (
 	"strings"
 )
 
-const missingRequiredSkillFileReasonPrefix = "missing required file "
+const (
+	missingRequiredSkillFileReasonPrefix = "missing required file "
+	antigravityEnforcementEvidence       = "live probe finding: trusted workspace policy is informational for reads; only macOS TCC enforces a narrow folder set, leaving credential directories reachable"
+)
 
 // agentPathSpec defines the configuration for scanning an agent's files.
 type agentPathSpec struct {
-	Name      AgentName
-	Advisory  bool
-	ConfigDir string
-	Home      []pathSpec
-	Project   []pathSpec
+	Name                AgentName
+	Enforcement         Enforcement
+	EnforcementEvidence string
+	ConfigDir           string
+	Home                []pathSpec
+	Project             []pathSpec
 }
 
 type pathSpec struct {
@@ -136,7 +140,11 @@ func customDirProject(path, comment string) pathSpec {
 }
 
 func scanAgentPaths(projectDir, homeDir string, spec agentPathSpec) AgentResult {
-	r := AgentResult{Name: spec.Name, Advisory: spec.Advisory}
+	r := AgentResult{
+		Name:                spec.Name,
+		Enforcement:         spec.Enforcement,
+		EnforcementEvidence: spec.EnforcementEvidence,
+	}
 
 	// Set config_dir from home directory paths
 	if homeDir != "" && spec.ConfigDir != "" {
@@ -255,6 +263,7 @@ func scanAgentPaths(projectDir, homeDir string, spec agentPathSpec) AgentResult 
 	}
 
 	r.Tokens = bytesToTokens(totalBytes)
+	r.NormalizeEnforcement()
 	return r
 }
 
@@ -581,7 +590,6 @@ func scanCursor(projectDir, homeDir string) AgentResult {
 func scanOpenCode(projectDir, homeDir string) AgentResult {
 	spec := agentPathSpec{
 		Name:      AgentOpenCode,
-		Advisory:  true,
 		ConfigDir: ".config/opencode",
 		Home: []pathSpec{
 			configFileHome(".config/opencode/opencode.json", "(advisory)", parseOpenCodeJSON),
@@ -598,7 +606,6 @@ func scanOpenCode(projectDir, homeDir string) AgentResult {
 func scanCodex(projectDir, homeDir string) AgentResult {
 	spec := agentPathSpec{
 		Name:      AgentCodex,
-		Advisory:  true,
 		ConfigDir: ".codex",
 		Home: []pathSpec{
 			fileHome(".codex/AGENTS.md", "(advisory)"),
@@ -616,7 +623,6 @@ func scanCodex(projectDir, homeDir string) AgentResult {
 func scanQwen(projectDir, homeDir string) AgentResult {
 	spec := agentPathSpec{
 		Name:      AgentQwen,
-		Advisory:  true,
 		ConfigDir: ".qwen",
 		Home: []pathSpec{
 			skillDirHome(".qwen/skills", "(advisory)"),
@@ -629,7 +635,6 @@ func scanQwen(projectDir, homeDir string) AgentResult {
 func scanOpenClaw(projectDir, homeDir string) AgentResult {
 	spec := agentPathSpec{
 		Name:      AgentOpenClaw,
-		Advisory:  true,
 		ConfigDir: ".openclaw",
 		Home: []pathSpec{
 			skillDirHome(".openclaw/skills", "(advisory)"),
@@ -659,7 +664,6 @@ func scanWindsurf(projectDir, homeDir string) AgentResult {
 func scanAider(projectDir, homeDir string) AgentResult {
 	spec := agentPathSpec{
 		Name:      AgentAider,
-		Advisory:  true,
 		ConfigDir: ".aider",
 		Home: []pathSpec{
 			fileHome(".aider.conf.yml", "(advisory)"),
@@ -676,7 +680,6 @@ func scanAider(projectDir, homeDir string) AgentResult {
 func scanContinue(projectDir, homeDir string) AgentResult {
 	spec := agentPathSpec{
 		Name:      AgentContinue,
-		Advisory:  true,
 		ConfigDir: ".continue",
 		Home: []pathSpec{
 			fileHome(".continue/config.yaml", "(advisory)"),
@@ -723,7 +726,6 @@ func scanKilocode(projectDir, homeDir string) AgentResult {
 func scanVibe(projectDir, homeDir string) AgentResult {
 	spec := agentPathSpec{
 		Name:      AgentVibe,
-		Advisory:  true,
 		ConfigDir: ".vibe",
 		Home: []pathSpec{
 			skillDirHome(".vibe/skills", "(advisory)"),
@@ -738,7 +740,6 @@ func scanVibe(projectDir, homeDir string) AgentResult {
 func scanGoose(projectDir, homeDir string) AgentResult {
 	spec := agentPathSpec{
 		Name:      AgentGoose,
-		Advisory:  true,
 		ConfigDir: ".config/goose",
 		Home: []pathSpec{
 			fileHome(".config/goose/config.yaml", "(advisory)"),
@@ -751,14 +752,15 @@ func scanGoose(projectDir, homeDir string) AgentResult {
 	return scanAgentPaths(projectDir, homeDir, spec)
 }
 
-// WO-66: Antigravity paths are advisory until agy hook/runtime integration is verified.
+// WO-77: Antigravity guardrails are verified advisory, not read-enforcing.
 func scanAntigravity(projectDir, homeDir string) AgentResult {
 	const antigravitySkillFile = "SKILL.md"
 
 	spec := agentPathSpec{
-		Name:      AgentAntigravity,
-		Advisory:  true,
-		ConfigDir: ".gemini/antigravity-cli",
+		Name:                AgentAntigravity,
+		Enforcement:         EnforcementAdvisory,
+		EnforcementEvidence: antigravityEnforcementEvidence,
+		ConfigDir:           ".gemini/antigravity-cli",
 		Home: []pathSpec{
 			fileHome(".gemini/GEMINI.md", "(advisory)"),
 			skillDirHomeRequiredFile(".gemini/antigravity-cli/skills", antigravitySkillFile, "(advisory)"),

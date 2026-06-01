@@ -515,8 +515,8 @@ func TestScanOpenCode_NoConfig(t *testing.T) {
 	if r.Skills != 0 || r.MCP != 0 {
 		t.Errorf("expected zeros, got skills=%d mcp=%d", r.Skills, r.MCP)
 	}
-	if !r.Advisory {
-		t.Error("expected advisory=true")
+	if r.Advisory {
+		t.Error("expected advisory=false")
 	}
 }
 
@@ -656,8 +656,8 @@ func TestScanCodex_NoConfig(t *testing.T) {
 	if r.Skills != 0 {
 		t.Errorf("skills = %d, want 0", r.Skills)
 	}
-	if !r.Advisory {
-		t.Error("expected advisory=true")
+	if r.Advisory {
+		t.Error("expected advisory=false")
 	}
 }
 
@@ -775,8 +775,8 @@ func TestScanQwen_NoConfig(t *testing.T) {
 	if r.MCP != 0 {
 		t.Errorf("mcp = %d, want 0", r.MCP)
 	}
-	if !r.Advisory {
-		t.Error("expected advisory=true")
+	if r.Advisory {
+		t.Error("expected advisory=false")
 	}
 }
 
@@ -834,8 +834,8 @@ func TestScanOpenClaw_NoConfig(t *testing.T) {
 	if r.Skills != 0 || r.MCP != 0 {
 		t.Errorf("expected zeros, got skills=%d mcp=%d", r.Skills, r.MCP)
 	}
-	if !r.Advisory {
-		t.Error("expected advisory=true")
+	if r.Advisory {
+		t.Error("expected advisory=false")
 	}
 }
 
@@ -1221,8 +1221,8 @@ func TestScanAider_NoConfig(t *testing.T) {
 	if r.Skills != 0 {
 		t.Errorf("skills = %d, want 0", r.Skills)
 	}
-	if !r.Advisory {
-		t.Error("expected advisory=true")
+	if r.Advisory {
+		t.Error("expected advisory=false")
 	}
 }
 
@@ -1279,8 +1279,8 @@ func TestScanContinue_NoConfig(t *testing.T) {
 	if r.Skills != 0 {
 		t.Errorf("skills = %d, want 0", r.Skills)
 	}
-	if !r.Advisory {
-		t.Error("expected advisory=true")
+	if r.Advisory {
+		t.Error("expected advisory=false")
 	}
 }
 
@@ -1806,8 +1806,8 @@ func TestScanVibe_NoConfig(t *testing.T) {
 	if r.Skills != 0 || r.MCP != 0 {
 		t.Errorf("expected zeros, got skills=%d mcp=%d", r.Skills, r.MCP)
 	}
-	if !r.Advisory {
-		t.Error("expected advisory=true")
+	if r.Advisory {
+		t.Error("expected advisory=false")
 	}
 }
 
@@ -1875,8 +1875,8 @@ func TestScanGoose_NoConfig(t *testing.T) {
 	if r.Skills != 0 || r.MCP != 0 {
 		t.Errorf("expected zeros, got skills=%d mcp=%d", r.Skills, r.MCP)
 	}
-	if !r.Advisory {
-		t.Error("expected advisory=true")
+	if r.Advisory {
+		t.Error("expected advisory=false")
 	}
 }
 

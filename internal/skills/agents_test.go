@@ -1,6 +1,7 @@
 package skills
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -312,7 +313,40 @@ func TestAllAgents(t *testing.T) {
 			if result.Hooks != tc.expectedHooks {
 				t.Errorf("Expected %d hooks, got %d", tc.expectedHooks, result.Hooks)
 			}
+			expectedEnforcement := EnforcementUnverified
+			expectedAdvisory := false
+			if tc.name == "Antigravity" {
+				expectedEnforcement = EnforcementAdvisory
+				expectedAdvisory = true
+			}
+			if result.Enforcement != expectedEnforcement {
+				t.Errorf("Expected enforcement %q, got %q", expectedEnforcement, result.Enforcement)
+			}
+			if result.Advisory != expectedAdvisory {
+				t.Errorf("Expected advisory %v, got %v", expectedAdvisory, result.Advisory)
+			}
+			if tc.name != "Antigravity" && result.EnforcementEvidence != "" {
+				t.Errorf("Expected no enforcement evidence for %s, got %q", tc.name, result.EnforcementEvidence)
+			}
 		})
+	}
+}
+
+// WO-77: enforcing/advisory posture requires evidence and otherwise normalizes.
+func TestNormalizeEnforcementRequiresEvidence(t *testing.T) {
+	result := AgentResult{Enforcement: EnforcementAdvisory}
+	result.NormalizeEnforcement()
+	if result.Enforcement != EnforcementUnverified {
+		t.Errorf("Expected advisory without evidence to normalize to unverified, got %q", result.Enforcement)
+	}
+	if result.Advisory {
+		t.Errorf("Expected advisory alias to be false after normalization")
+	}
+
+	result = AgentResult{Enforcement: EnforcementEnforcing, EnforcementEvidence: "   "}
+	result.NormalizeEnforcement()
+	if result.Enforcement != EnforcementUnverified {
+		t.Errorf("Expected enforcing without evidence to normalize to unverified, got %q", result.Enforcement)
 	}
 }
 
@@ -366,6 +400,12 @@ func TestScanAntigravity(t *testing.T) {
 	if !result.Advisory {
 		t.Errorf("Expected Antigravity result to be advisory")
 	}
+	if result.Enforcement != EnforcementAdvisory {
+		t.Errorf("Expected enforcement %q, got %q", EnforcementAdvisory, result.Enforcement)
+	}
+	if result.EnforcementEvidence != antigravityEnforcementEvidence {
+		t.Errorf("Expected antigravity enforcement evidence, got %q", result.EnforcementEvidence)
+	}
 	if result.ConfigDir != "~/.gemini/antigravity-cli" {
 		t.Errorf("Expected config_dir ~/.gemini/antigravity-cli, got %s", result.ConfigDir)
 	}
@@ -386,6 +426,13 @@ func TestScanAntigravity(t *testing.T) {
 		len("project workflow"))
 	if result.Tokens != bytesToTokens(countedBytes) {
 		t.Errorf("Expected %d tokens, got %d", bytesToTokens(countedBytes), result.Tokens)
+	}
+	encoded, err := json.Marshal(result)
+	if err != nil {
+		t.Fatalf("Failed to marshal result: %v", err)
+	}
+	if !jsonFieldExists(encoded, "enforcement") || !jsonFieldExists(encoded, "enforcement_evidence") {
+		t.Errorf("Expected JSON output to include enforcement fields: %s", encoded)
 	}
 	expectedInvalid := []string{
 		"~/.gemini/antigravity-cli/skills/empty",
@@ -536,4 +583,13 @@ func invalidLocationExists(locations []InvalidLocation, agent, path, reason stri
 		}
 	}
 	return false
+}
+
+func jsonFieldExists(data []byte, field string) bool {
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return false
+	}
+	_, ok := raw[field]
+	return ok
 }
