@@ -58,10 +58,13 @@ func newSkillsCmd() *cobra.Command {
 }
 
 const (
-	skillsAgentWidth  = 14
-	skillsNumWidth    = 8
-	skillsTokenWidth  = 10
-	skillsBudgetWidth = 8
+	skillsAgentWidth       = 14
+	skillsNumWidth         = 8
+	skillsEnforcementWidth = 10
+	skillsTokenWidth       = 10
+	skillsBudgetWidth      = 8
+	advisoryCaution        = "config is advisory only"
+	advisoryMitigation     = "config does not enforce reads; bound via external sandbox or route sensitive work elsewhere"
 )
 
 func formatSkillsText(w io.Writer, result *skills.ScanResult, showTokens bool, budget int) {
@@ -76,11 +79,12 @@ func formatSkillsText(w io.Writer, result *skills.ScanResult, showTokens bool, b
 
 	if len(result.Agents) > 0 {
 		// Header.
-		_, _ = fmt.Fprintf(w, "  %-*s %-*s %-*s %-*s",
+		_, _ = fmt.Fprintf(w, "  %-*s %-*s %-*s %-*s %-*s",
 			skillsAgentWidth, "Agent",
 			skillsNumWidth, "Skills",
 			skillsNumWidth, "Hooks",
 			skillsNumWidth, "MCP",
+			skillsEnforcementWidth, "Posture",
 		)
 		if showTokens {
 			_, _ = fmt.Fprintf(w, " %-*s", skillsTokenWidth, "Tokens")
@@ -93,11 +97,12 @@ func formatSkillsText(w io.Writer, result *skills.ScanResult, showTokens bool, b
 		// Rows.
 		for _, a := range result.Agents {
 			sources := strings.Join(a.Sources, ", ")
-			_, _ = fmt.Fprintf(w, "  %-*s %-*d %-*d %-*d",
+			_, _ = fmt.Fprintf(w, "  %-*s %-*d %-*d %-*d %-*s",
 				skillsAgentWidth, a.Name,
 				skillsNumWidth, a.Skills,
 				skillsNumWidth, a.Hooks,
 				skillsNumWidth, a.MCP,
+				skillsEnforcementWidth, agentEnforcement(a),
 			)
 			if showTokens {
 				_, _ = fmt.Fprintf(w, " %-*s", skillsTokenWidth, formatTokenCount(a.Tokens))
@@ -108,6 +113,8 @@ func formatSkillsText(w io.Writer, result *skills.ScanResult, showTokens bool, b
 			}
 			_, _ = fmt.Fprintf(w, " %s\n", sources)
 		}
+
+		writeSkillsAdvisoryCautions(w, result.Agents)
 	}
 
 	if len(result.InvalidLocations) > 0 {
@@ -126,6 +133,32 @@ func formatSkillsText(w io.Writer, result *skills.ScanResult, showTokens bool, b
 		_, _ = fmt.Fprintln(w)
 		_, _ = fmt.Fprintf(w, "  ANCC product: %s (name: %s)\n",
 			result.Product.Path, result.Product.Name)
+	}
+}
+
+// WO-78: keep posture rendering evidence-based and non-blocking.
+func agentEnforcement(a skills.AgentResult) skills.Enforcement {
+	switch a.Enforcement {
+	case skills.EnforcementEnforcing, skills.EnforcementAdvisory, skills.EnforcementUnverified:
+		return a.Enforcement
+	default:
+		return skills.EnforcementUnverified
+	}
+}
+
+func writeSkillsAdvisoryCautions(w io.Writer, agents []skills.AgentResult) {
+	wroteHeader := false
+	for _, a := range agents {
+		if agentEnforcement(a) != skills.EnforcementAdvisory {
+			continue
+		}
+		if !wroteHeader {
+			_, _ = fmt.Fprintln(w)
+			_, _ = fmt.Fprintln(w, "  Cautions:")
+			wroteHeader = true
+		}
+		_, _ = fmt.Fprintf(w, "  %-*s caution: %s; evidence: %s; mitigation: %s\n",
+			skillsAgentWidth, a.Name, advisoryCaution, a.EnforcementEvidence, advisoryMitigation)
 	}
 }
 

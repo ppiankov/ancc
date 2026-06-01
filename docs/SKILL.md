@@ -88,6 +88,7 @@ Scans for agent configurations in a directory. Detects 15 agents: Claude Code, C
       "mcp": 0,
       "tokens": 15496,
       "sources": ["~/.claude/settings.json", "~/.claude/skills/"],
+      "enforcement": "unverified",
       "advisory": false,
       "budget_pct": 7.7
     }
@@ -106,7 +107,7 @@ Scans for agent configurations in a directory. Detects 15 agents: Claude Code, C
 }
 ```
 
-Note: `budget_pct` field is only present when `--budget` is set. Antigravity skill directories must contain `SKILL.md`; candidates without that marker are reported in `invalid_locations` and are not counted as skills, sources, or tokens.
+Note: `budget_pct` field is only present when `--budget` is set. `enforcement` reports `enforcing`, `advisory`, or `unverified`; advisory text output includes evidence and mitigation without changing exit codes. Antigravity skill directories must contain `SKILL.md`; candidates without that marker are reported in `invalid_locations` and are not counted as skills, sources, or tokens.
 
 **Exit codes:**
 - 0: scan completed
@@ -208,9 +209,20 @@ Checks ancc's own health and reports companion tools.
     {"name": "go-available", "status": "ok", "message": "go version go1.24.0 darwin/arm64"},
     {"name": "github-api", "status": "warn", "message": "GITHUB_TOKEN not set"},
     {"name": "homebrew", "status": "ok", "message": "brew found"}
+  ],
+  "agents": [
+    {
+      "name": "antigravity",
+      "enforcement": "advisory",
+      "enforcement_evidence": "live probe finding: trusted workspace policy is informational",
+      "caution": "config is advisory only",
+      "mitigation": "config does not enforce reads; bound via external sandbox or route sensitive work elsewhere"
+    }
   ]
 }
 ```
+
+Text output also shows each detected agent's posture. Advisory posture is informational and does not make `doctor` fail.
 
 **Exit codes:**
 - 0: all healthy or warnings only
@@ -421,4 +433,4 @@ ancc doctor --format json | jq '.status'
 | goose | `~/.config/goose/config.yaml`, `~/.config/goose/skills/`, `.goosehints` | Yes |
 | antigravity | `~/.gemini/GEMINI.md`, `~/.gemini/antigravity-cli/skills/`, `~/.gemini/antigravity-cli/global_workflows/`, `~/.gemini/antigravity-cli/workflows/`, `AGENTS.md`, `.antigravitycli/skills/`, `.antigravitycli/workflows/` | Yes |
 
-Advisory agents are detected but not considered primary — their config paths are labeled accordingly in output. Antigravity detection is advisory while agy CLI customization paths continue to settle. Antigravity skill directories must contain `SKILL.md`; invalid candidates are reported separately instead of being counted.
+Advisory agents are detected but not considered primary — their config paths are labeled accordingly in output. Use the `enforcement` field for current posture; the legacy `advisory` field is retained for compatibility. Antigravity skill directories must contain `SKILL.md`; invalid candidates are reported separately instead of being counted.

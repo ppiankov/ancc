@@ -130,6 +130,87 @@ func TestFormatSkillsTextShowsInvalidLocations(t *testing.T) {
 	}
 }
 
+func TestFormatSkillsTextShowsEnforcementPosture(t *testing.T) {
+	evidence := "live probe finding: trusted workspace policy is informational"
+	result := &skills.ScanResult{
+		Agents: []skills.AgentResult{
+			{
+				Name:                skills.AgentAntigravity,
+				Enforcement:         skills.EnforcementAdvisory,
+				EnforcementEvidence: evidence,
+				Sources:             []string{"AGENTS.md"},
+			},
+			{
+				Name:        skills.AgentCline,
+				Enforcement: skills.EnforcementUnverified,
+				Sources:     []string{".clinerules/"},
+			},
+		},
+	}
+
+	buf := new(bytes.Buffer)
+	formatSkillsText(buf, result, false, 0)
+	output := buf.String()
+
+	for _, want := range []string{
+		"Posture",
+		skills.AgentAntigravity,
+		string(skills.EnforcementAdvisory),
+		evidence,
+		advisoryMitigation,
+		skills.AgentCline,
+		string(skills.EnforcementUnverified),
+	} {
+		if !strings.Contains(output, want) {
+			t.Errorf("expected output to contain %q; got: %s", want, output)
+		}
+	}
+	for _, line := range strings.Split(output, "\n") {
+		if strings.Contains(line, skills.AgentCline) && strings.Contains(line, "caution:") {
+			t.Errorf("unverified cline line should not include caution: %q", line)
+		}
+	}
+}
+
+func TestFormatSkillsJSONIncludesEnforcementPosture(t *testing.T) {
+	evidence := "live probe finding: trusted workspace policy is informational"
+	result := &skills.ScanResult{
+		Path: "/tmp/project",
+		Agents: []skills.AgentResult{
+			{
+				Name:                skills.AgentAntigravity,
+				Enforcement:         skills.EnforcementAdvisory,
+				EnforcementEvidence: evidence,
+			},
+		},
+	}
+
+	buf := new(bytes.Buffer)
+	if err := formatSkillsJSON(buf, result, 0); err != nil {
+		t.Fatalf("formatSkillsJSON returned error: %v", err)
+	}
+
+	var raw struct {
+		Agents []struct {
+			Name                string             `json:"name"`
+			Enforcement         skills.Enforcement `json:"enforcement"`
+			EnforcementEvidence string             `json:"enforcement_evidence"`
+		} `json:"agents"`
+	}
+	if err := json.Unmarshal(buf.Bytes(), &raw); err != nil {
+		t.Fatalf("invalid JSON: %v\nraw: %s", err, buf.String())
+	}
+	if len(raw.Agents) != 1 {
+		t.Fatalf("agents = %d, want 1", len(raw.Agents))
+	}
+	if raw.Agents[0].Enforcement != skills.EnforcementAdvisory {
+		t.Fatalf("enforcement = %q, want %q", raw.Agents[0].Enforcement, skills.EnforcementAdvisory)
+	}
+	if raw.Agents[0].EnforcementEvidence != evidence {
+		t.Fatalf("evidence = %q, want %q", raw.Agents[0].EnforcementEvidence, evidence)
+	}
+}
+
 func TestFormatSkillsJSONWithBudgetIncludesInvalidLocations(t *testing.T) {
 	result := &skills.ScanResult{
 		Path: "/tmp/project",

@@ -10,6 +10,8 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+
+	"github.com/ppiankov/ancc/internal/skills"
 )
 
 func fakeEnv(version string) *doctorEnv {
@@ -37,6 +39,10 @@ func fakeEnv(version string) *doctorEnv {
 				return []byte("go version go1.24.0 darwin/arm64"), nil
 			}
 			return nil, fmt.Errorf("unknown command: %s", name)
+		},
+		projectDir: ".",
+		scanAgents: func(string) (*skills.ScanResult, error) {
+			return &skills.ScanResult{}, nil
 		},
 	}
 }
@@ -117,6 +123,59 @@ func TestRunDoctor_GitHubAPIUnreachable(t *testing.T) {
 	result := runDoctor(env)
 	if result.Status != doctorError {
 		t.Errorf("status = %q, want %q", result.Status, doctorError)
+	}
+}
+
+func TestRunDoctor_AgentPosture(t *testing.T) {
+	evidence := "live probe finding: trusted workspace policy is informational"
+	env := fakeEnv("1.0.0")
+	env.scanAgents = func(path string) (*skills.ScanResult, error) {
+		if path != "." {
+			t.Fatalf("scan path = %q, want .", path)
+		}
+		return &skills.ScanResult{
+			Agents: []skills.AgentResult{
+				{
+					Name:                skills.AgentAntigravity,
+					Enforcement:         skills.EnforcementAdvisory,
+					EnforcementEvidence: evidence,
+				},
+				{
+					Name:        skills.AgentCline,
+					Enforcement: skills.EnforcementUnverified,
+				},
+			},
+		}, nil
+	}
+
+	result := runDoctor(env)
+	if result.Status != doctorOK {
+		t.Fatalf("status = %q, want %q", result.Status, doctorOK)
+	}
+	if len(result.Agents) != 2 {
+		t.Fatalf("agents = %d, want 2", len(result.Agents))
+	}
+
+	antigravity := result.Agents[0]
+	if antigravity.Enforcement != skills.EnforcementAdvisory {
+		t.Fatalf("antigravity enforcement = %q, want %q", antigravity.Enforcement, skills.EnforcementAdvisory)
+	}
+	if antigravity.EnforcementEvidence != evidence {
+		t.Fatalf("antigravity evidence = %q, want %q", antigravity.EnforcementEvidence, evidence)
+	}
+	if antigravity.Caution != advisoryCaution {
+		t.Fatalf("antigravity caution = %q, want %q", antigravity.Caution, advisoryCaution)
+	}
+	if antigravity.Mitigation != advisoryMitigation {
+		t.Fatalf("antigravity mitigation = %q, want %q", antigravity.Mitigation, advisoryMitigation)
+	}
+
+	cline := result.Agents[1]
+	if cline.Enforcement != skills.EnforcementUnverified {
+		t.Fatalf("cline enforcement = %q, want %q", cline.Enforcement, skills.EnforcementUnverified)
+	}
+	if cline.Caution != "" || cline.Mitigation != "" || cline.EnforcementEvidence != "" {
+		t.Fatalf("unverified agent should not carry caution/evidence/mitigation: %+v", cline)
 	}
 }
 
@@ -223,6 +282,52 @@ func TestDoctorCmd_TextOutput(t *testing.T) {
 	}
 	if !strings.Contains(out, "Result:") {
 		t.Errorf("expected 'Result:' in output, got %q", out)
+	}
+}
+
+func TestFormatDoctorTextShowsAgentPosture(t *testing.T) {
+	evidence := "probe citation"
+	result := &DoctorResult{
+		Status: doctorOK,
+		Checks: []DoctorCheck{
+			{Name: "ancc-version", Status: doctorOK, Message: "dev"},
+		},
+		Agents: []DoctorAgentPosture{
+			{
+				Name:                skills.AgentAntigravity,
+				Enforcement:         skills.EnforcementAdvisory,
+				EnforcementEvidence: evidence,
+				Caution:             advisoryCaution,
+				Mitigation:          advisoryMitigation,
+			},
+			{
+				Name:        skills.AgentCline,
+				Enforcement: skills.EnforcementUnverified,
+			},
+		},
+	}
+
+	buf := new(bytes.Buffer)
+	formatDoctorText(buf, result)
+	out := buf.String()
+
+	for _, want := range []string{
+		"Agent enforcement:",
+		skills.AgentAntigravity,
+		string(skills.EnforcementAdvisory),
+		evidence,
+		advisoryMitigation,
+		skills.AgentCline,
+		string(skills.EnforcementUnverified),
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("expected output to contain %q; got: %s", want, out)
+		}
+	}
+	for _, line := range strings.Split(out, "\n") {
+		if strings.Contains(line, skills.AgentCline) && strings.Contains(line, "caution:") {
+			t.Errorf("unverified cline line should not include caution: %q", line)
+		}
 	}
 }
 

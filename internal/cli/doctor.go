@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/ppiankov/ancc/internal/skills"
 	"github.com/spf13/cobra"
 )
 
@@ -23,8 +24,20 @@ type DoctorCheck struct {
 
 // DoctorResult holds all health check results.
 type DoctorResult struct {
-	Status string        `json:"status"`
-	Checks []DoctorCheck `json:"checks"`
+	Status string               `json:"status"`
+	Checks []DoctorCheck        `json:"checks"`
+	Agents []DoctorAgentPosture `json:"agents,omitempty"` // WO-78: per-agent enforcement posture.
+}
+
+// DoctorAgentPosture mirrors scanner enforcement without changing doctor status.
+//
+// WO-78: doctor exposes posture evidence without failing advisory agents.
+type DoctorAgentPosture struct {
+	Name                string             `json:"name"`
+	Enforcement         skills.Enforcement `json:"enforcement"`
+	EnforcementEvidence string             `json:"enforcement_evidence,omitempty"`
+	Caution             string             `json:"caution,omitempty"`
+	Mitigation          string             `json:"mitigation,omitempty"`
 }
 
 const (
@@ -42,6 +55,8 @@ type doctorEnv struct {
 	httpDo       func(*http.Request) (*http.Response, error)
 	getenv       func(string) string
 	cmdOutput    func(string, ...string) ([]byte, error)
+	projectDir   string
+	scanAgents   func(string) (*skills.ScanResult, error)
 }
 
 func defaultDoctorEnv(ctx context.Context, version string) *doctorEnv {
@@ -63,6 +78,8 @@ func defaultDoctorEnv(ctx context.Context, version string) *doctorEnv {
 		cmdOutput: func(name string, args ...string) ([]byte, error) {
 			return exec.Command(name, args...).Output()
 		},
+		projectDir: ".",
+		scanAgents: skills.Scan,
 	}
 }
 
@@ -107,6 +124,7 @@ func runDoctor(env *doctorEnv) *DoctorResult {
 	result.Checks = append(result.Checks, checkGo(env))
 	result.Checks = append(result.Checks, checkGitHubAPI(env))
 	result.Checks = append(result.Checks, checkHomebrew(env))
+	result.Agents = checkAgentPosture(env)
 
 	result.Status = doctorOK
 	for _, c := range result.Checks {
@@ -120,6 +138,38 @@ func runDoctor(env *doctorEnv) *DoctorResult {
 	}
 
 	return result
+}
+
+// WO-78: surface posture as evidence for users, not as a health failure.
+func checkAgentPosture(env *doctorEnv) []DoctorAgentPosture {
+	if env == nil || env.scanAgents == nil {
+		return nil
+	}
+
+	projectDir := env.projectDir
+	if projectDir == "" {
+		projectDir = "."
+	}
+
+	scanResult, err := env.scanAgents(projectDir)
+	if err != nil || scanResult == nil {
+		return nil
+	}
+
+	posture := make([]DoctorAgentPosture, 0, len(scanResult.Agents))
+	for _, a := range scanResult.Agents {
+		entry := DoctorAgentPosture{
+			Name:                a.Name,
+			Enforcement:         agentEnforcement(a),
+			EnforcementEvidence: a.EnforcementEvidence,
+		}
+		if entry.Enforcement == skills.EnforcementAdvisory {
+			entry.Caution = advisoryCaution
+			entry.Mitigation = advisoryMitigation
+		}
+		posture = append(posture, entry)
+	}
+	return posture
 }
 
 func checkVersion(env *doctorEnv) DoctorCheck {
@@ -242,6 +292,25 @@ func formatDoctorText(w io.Writer, result *DoctorResult) {
 			line += "  " + c.Message
 		}
 		_, _ = fmt.Fprintln(w, line)
+	}
+
+	if len(result.Agents) > 0 {
+		_, _ = fmt.Fprintln(w)
+		_, _ = fmt.Fprintln(w, "  Agent enforcement:")
+		_, _ = fmt.Fprintf(w, "  %-*s %-*s\n",
+			skillsAgentWidth, "Agent",
+			skillsEnforcementWidth, "Posture",
+		)
+		for _, a := range result.Agents {
+			_, _ = fmt.Fprintf(w, "  %-*s %-*s\n",
+				skillsAgentWidth, a.Name,
+				skillsEnforcementWidth, a.Enforcement,
+			)
+			if a.Caution != "" {
+				_, _ = fmt.Fprintf(w, "  %-*s caution: %s; evidence: %s; mitigation: %s\n",
+					skillsAgentWidth, a.Name, a.Caution, a.EnforcementEvidence, a.Mitigation)
+			}
+		}
 	}
 
 	_, _ = fmt.Fprintln(w)
