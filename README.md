@@ -62,6 +62,8 @@ Key pattern for agents: `ancc validate . --format json` returns machine-parseabl
 
 `ancc skills` and `ancc doctor` include each detected agent's enforcement posture; advisory posture includes evidence and mitigation without changing exit codes.
 
+The companion [ANCC conventions](docs/conventions.md) define nine governed conventions across Behavior, Execution, Spend, and Time, including `enforcement-provenance` for evidence-backed guardrail claims.
+
 ## Usage
 
 ```
