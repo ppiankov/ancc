@@ -466,7 +466,7 @@ ancc doctor --format json | jq '.status'
 | aider | `~/.aider.conf.yml`, `~/.aider/skills/`, `.aider.conf.yml`, `CONVENTIONS.md` | Yes |
 | continue | `~/.continue/config.yaml`, `~/.continue/config.json`, `.continuerc.json` | Yes |
 | copilot | `~/.copilot/skills/`, `.github/copilot-instructions.md`, `AGENTS.md` | No |
-| kilocode | `~/.kilocode/skills/`, `~/.config/kilo/opencode.json`, `.kilocode/rules/`, `.kilocode/skills/` | No |
+| kilocode | `~/.kilocode/skills/`, `~/.config/kilo/opencode.json`, `~/.config/kilo/kilo.jsonc`, `.kilocode/rules/`, `.kilocode/skills/`, `kilo.jsonc` | No |
 | vibe | `~/.vibe/skills/`, `AGENTS.md` (project) | Yes |
 | goose | `~/.config/goose/config.yaml`, `~/.config/goose/skills/`, `.goosehints` | Yes |
 | antigravity | `~/.gemini/GEMINI.md`, `~/.gemini/antigravity-cli/skills/`, `~/.gemini/antigravity-cli/global_workflows/`, `~/.gemini/antigravity-cli/workflows/`, `AGENTS.md`, `.antigravitycli/skills/`, `.antigravitycli/workflows/` | Yes |

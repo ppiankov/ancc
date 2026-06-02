@@ -228,6 +228,7 @@ func TestAllAgents(t *testing.T) {
 			"project/.github/copilot-instructions.md": "copilot instructions",
 			// kilocode
 			"home/.config/kilo/opencode.json":  `{"mcp": {"kilocode1": {}}, "instructions": [{}]}`,
+			"home/.config/kilo/kilo.jsonc":     `{"instructions": [{}]}`, // WO-86: Kilo CLI config
 			"project/.kilocode/rules/rule.txt": "rule",
 			// aider expanded
 			"project/CONVENTIONS.md": "conventions",
@@ -295,10 +296,10 @@ func TestAllAgents(t *testing.T) {
 		{"Windsurf", scanWindsurf, 3, 1, 0},
 		{"Aider", scanAider, 4, 0, 0}, // home conf + home skill dir + project conf + CONVENTIONS.md
 		{"Continue", scanContinue, 3, 0, 0},
-		{"Copilot", scanCopilot, 2, 0, 0}, // instructions + AGENTS.md
-		{"Kilocode", scanKilocode, 4, 1, 0},
-		{"Vibe", scanVibe, 2, 0, 0},   // home skill dir + project AGENTS.md
-		{"Goose", scanGoose, 2, 0, 0}, // home config + project .goosehints
+		{"Copilot", scanCopilot, 2, 0, 0},   // instructions + AGENTS.md
+		{"Kilocode", scanKilocode, 5, 1, 0}, // WO-86: +1 skill from kilo.jsonc instructions
+		{"Vibe", scanVibe, 2, 0, 0},         // home skill dir + project AGENTS.md
+		{"Goose", scanGoose, 2, 0, 0},       // home config + project .goosehints
 		{"Antigravity", scanAntigravity, 6, 0, 0},
 	}
 	for _, tc := range tests {

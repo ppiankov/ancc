@@ -730,10 +730,12 @@ func scanKilocode(projectDir, homeDir string) AgentResult {
 		Home: []pathSpec{
 			skillDirHome(".kilocode/skills", ""),
 			configFileHome(".config/kilo/opencode.json", "", parseOpenCodeJSON),
+			configFileHome(".config/kilo/kilo.jsonc", "", parseOpenCodeJSON), // WO-86: Kilo CLI config; absent = not-found
 		},
 		Project: []pathSpec{
 			dirFilesProject(".kilocode/rules", ""),
 			skillDirProject(".kilocode/skills", ""),
+			configFileProject("kilo.jsonc", "", parseOpenCodeJSON), // WO-86: project-level Kilo CLI config
 		},
 	}
 	return scanAgentPaths(projectDir, homeDir, spec)
