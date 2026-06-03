@@ -2,6 +2,19 @@
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-06-03
+
+### Added
+
+- Per-agent autonomy capability in `ancc skills` and `ancc doctor`: documented prompt-disabling modes (such as `--dangerously-skip-permissions`, `--full-auto`, `--yes-always`, `kilo run --auto`) shown for claude-code, antigravity, kilocode, codex, aider, and cursor, with the documentation source cited
+- Compound-risk caution: when an agent has a documented prompt-disabling mode and its enforcement is advisory or unverified, `ancc skills` and `ancc doctor` surface a single combined caution; agents with a verified enforcing posture are not flagged
+- `kilo.jsonc` config detection for the kilocode agent (home and project level)
+- Structured `autonomy` and `compound_caution` fields in `--format json` output
+
+### Fixed
+
+- Repaired a stray code fence in `docs/SKILL.md` and replaced the Cursor autonomy citation with a specific official source
+
 ## [0.9.0] - 2026-06-01
 
 ### Added
