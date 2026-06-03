@@ -144,6 +144,7 @@ type AutonomyCapability struct {
 }
 
 // CompoundCaution records the high-autonomy plus weak-enforcement synthesis.
+// WO-93: exported compound-risk caution for scanner and doctor JSON.
 type CompoundCaution struct {
 	Mode        string             `json:"mode" yaml:"mode"`               // WO-93: autonomy mode that triggered the compound caution
 	Enforcement EnforcementPosture `json:"enforcement" yaml:"enforcement"` // WO-93: weak enforcement state paired with autonomy
@@ -223,11 +224,13 @@ func (r *AgentResult) NormalizeEnforcement() {
 }
 
 // NormalizeCompoundCaution derives the compound caution after autonomy and enforcement normalize.
+// WO-93: compound caution is derived from existing autonomy and enforcement state.
 func (r *AgentResult) NormalizeCompoundCaution() {
 	r.CompoundCaution = r.CompoundRiskCaution()
 }
 
 // CompoundRiskCaution returns the informational high-autonomy plus weak-enforcement caution.
+// WO-93: synthesis helper keeps the caution informational, not a gate.
 func (r AgentResult) CompoundRiskCaution() *CompoundCaution {
 	enforcement := r.Enforcement
 	switch enforcement {
