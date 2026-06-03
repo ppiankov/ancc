@@ -26,20 +26,21 @@ type DoctorCheck struct {
 type DoctorResult struct {
 	Status string               `json:"status"`
 	Checks []DoctorCheck        `json:"checks"`
-	Agents []DoctorAgentPosture `json:"agents,omitempty"` // WO-78: per-agent enforcement posture.
+	Agents []DoctorAgentPosture `json:"agents,omitempty"` // WO-78/WO-90: per-agent posture and autonomy capability.
 }
 
-// DoctorAgentPosture mirrors scanner enforcement without changing doctor status.
+// DoctorAgentPosture mirrors scanner risk surfaces without changing doctor status.
 //
 // WO-78: doctor exposes posture evidence without failing advisory agents.
 type DoctorAgentPosture struct {
-	Name                string                `json:"name"`
-	Enforcement         skills.Enforcement    `json:"enforcement"`
-	EnforcementEvidence string                `json:"enforcement_evidence,omitempty"`
-	Evidence            []skills.EvidenceItem `json:"evidence,omitempty"` // WO-77: structured evidence items
-	Warning             string                `json:"warning,omitempty"`  // WO-78: advisory evidence-quality warning
-	Caution             string                `json:"caution,omitempty"`
-	Mitigation          string                `json:"mitigation,omitempty"`
+	Name                string                      `json:"name"`
+	Enforcement         skills.Enforcement          `json:"enforcement"`
+	Autonomy            []skills.AutonomyCapability `json:"autonomy,omitempty"` // WO-90: documented prompt-disabling capability
+	EnforcementEvidence string                      `json:"enforcement_evidence,omitempty"`
+	Evidence            []skills.EvidenceItem       `json:"evidence,omitempty"` // WO-77: structured evidence items
+	Warning             string                      `json:"warning,omitempty"`  // WO-78: advisory evidence-quality warning
+	Caution             string                      `json:"caution,omitempty"`
+	Mitigation          string                      `json:"mitigation,omitempty"`
 }
 
 const (
@@ -163,6 +164,7 @@ func checkAgentPosture(env *doctorEnv) []DoctorAgentPosture {
 		entry := DoctorAgentPosture{
 			Name:                a.Name,
 			Enforcement:         agentEnforcement(a),
+			Autonomy:            a.Autonomy,
 			EnforcementEvidence: a.EnforcementEvidence,
 			Evidence:            a.Evidence,
 			Warning:             a.Warning,
@@ -313,10 +315,36 @@ func formatDoctorText(w io.Writer, result *DoctorResult) {
 				writeEnforcingEvidenceBlock(w, a.Name, a.EnforcementEvidence, a.Evidence)
 			}
 		}
+
+		writeDoctorAutonomyDetails(w, result.Agents)
 	}
 
 	_, _ = fmt.Fprintln(w)
 	_, _ = fmt.Fprintf(w, "  Result: %s\n", strings.ToUpper(result.Status))
+}
+
+// WO-90: doctor mirrors autonomy capabilities without affecting health status.
+func writeDoctorAutonomyDetails(w io.Writer, agents []DoctorAgentPosture) {
+	wroteHeader := false
+	for _, a := range agents {
+		if len(a.Autonomy) == 0 {
+			continue
+		}
+		if !wroteHeader {
+			_, _ = fmt.Fprintln(w)
+			_, _ = fmt.Fprintln(w, "  Agent autonomy:")
+			_, _ = fmt.Fprintf(w, "  %-*s %-*s %-*s %s\n",
+				skillsAgentWidth, "Agent",
+				skillsAutonomyModeWidth, "Mode",
+				skillsSourceKindWidth, "Source",
+				"Capability",
+			)
+			wroteHeader = true
+		}
+		for _, capability := range a.Autonomy {
+			writeAutonomyCapabilityBlock(w, a.Name, capability)
+		}
+	}
 }
 
 func formatDoctorJSON(w io.Writer, result *DoctorResult) error {

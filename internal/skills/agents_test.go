@@ -302,6 +302,14 @@ func TestAllAgents(t *testing.T) {
 		{"Goose", scanGoose, 2, 0, 0},       // home config + project .goosehints
 		{"Antigravity", scanAntigravity, 6, 0, 0},
 	}
+	expectedAutonomyModes := map[string]string{
+		"ClaudeCode":  "--dangerously-skip-permissions",
+		"Cursor":      "Agent Auto-run",
+		"Codex":       "--full-auto",
+		"Aider":       "--yes-always",
+		"Kilocode":    "kilo run --auto",
+		"Antigravity": "--dangerously-skip-permissions",
+	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			result := tc.fn(projectDir, homeDir)
@@ -325,6 +333,20 @@ func TestAllAgents(t *testing.T) {
 			}
 			if result.Advisory != expectedAdvisory {
 				t.Errorf("Expected advisory %v, got %v", expectedAdvisory, result.Advisory)
+			}
+			if expectedMode, ok := expectedAutonomyModes[tc.name]; ok {
+				if len(result.Autonomy) != 1 {
+					t.Fatalf("Expected one autonomy capability for %s, got %+v", tc.name, result.Autonomy)
+				}
+				if result.Autonomy[0].Mode != expectedMode {
+					t.Errorf("Expected autonomy mode %q, got %q", expectedMode, result.Autonomy[0].Mode)
+				}
+				if result.Autonomy[0].SourceKind != AutonomySourceVendorDocs {
+					t.Errorf("Expected autonomy source kind %q, got %q",
+						AutonomySourceVendorDocs, result.Autonomy[0].SourceKind)
+				}
+			} else if len(result.Autonomy) != 0 {
+				t.Errorf("Expected no autonomy capability for %s, got %+v", tc.name, result.Autonomy)
 			}
 			if tc.name != "Antigravity" {
 				if result.EnforcementEvidence != "" {
@@ -358,17 +380,30 @@ func TestNormalizeEnforcementRequiresEvidence(t *testing.T) {
 	result = AgentResult{
 		Enforcement: EnforcementEnforcing,
 		Warning:     SecurityProbeSelfReportWarning,
+		Autonomy: []AutonomyCapability{
+			{
+				Mode:       " --yes-always ",
+				Disables:   " confirmation prompts ",
+				SourceKind: AutonomySourceVendorDocs,
+				Source:     " Aider options reference ",
+			},
+		},
 		Evidence: []EvidenceItem{
 			{Kind: EvidenceVendorDocs, Note: "vendor docs claim secure mode"},
 			{Kind: EvidenceAgentSelfReport, Note: "agent said YES"},
 		},
 	}
+	result.NormalizeAutonomy()
 	result.NormalizeEnforcement()
 	if result.Enforcement != EnforcementUnverified {
 		t.Errorf("Expected enforcing with invalid evidence kinds to normalize to unverified, got %q", result.Enforcement)
 	}
 	if len(result.Evidence) != 0 || result.Warning != "" || result.EnforcementEvidence != "" {
 		t.Errorf("Expected invalid-only evidence to normalize to plain unverified, got %+v", result)
+	}
+	if len(result.Autonomy) != 1 || result.Autonomy[0].Mode != "--yes-always" ||
+		result.Autonomy[0].Disables != "confirmation prompts" {
+		t.Errorf("Expected autonomy capability to remain after unverified normalization, got %+v", result.Autonomy)
 	}
 
 	result = AgentResult{
@@ -499,6 +534,7 @@ func TestScanAntigravity(t *testing.T) {
 		t.Fatalf("Failed to marshal result: %v", err)
 	}
 	if !jsonFieldExists(encoded, "enforcement") ||
+		!jsonFieldExists(encoded, "autonomy") ||
 		!jsonFieldExists(encoded, "enforcement_evidence") ||
 		!jsonFieldExists(encoded, "evidence") ||
 		!jsonFieldExists(encoded, "warning") {

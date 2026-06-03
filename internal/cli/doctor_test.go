@@ -131,6 +131,14 @@ func TestRunDoctor_AgentPosture(t *testing.T) {
 	evidence := []skills.EvidenceItem{
 		{Kind: skills.EvidenceRealToolResult, Note: "trustedWorkspaces does not confine reads to workspace"},
 	}
+	autonomy := []skills.AutonomyCapability{
+		{
+			Mode:       "--full-auto",
+			Disables:   "edit and command approval prompts within the selected sandbox mode",
+			SourceKind: skills.AutonomySourceVendorDocs,
+			Source:     "OpenAI Codex CLI approval modes docs",
+		},
+	}
 	env := fakeEnv("1.0.0")
 	env.scanAgents = func(path string) (*skills.ScanResult, error) {
 		if path != "." {
@@ -147,6 +155,7 @@ func TestRunDoctor_AgentPosture(t *testing.T) {
 				{
 					Name:        skills.AgentCline,
 					Enforcement: skills.EnforcementUnverified,
+					Autonomy:    autonomy,
 				},
 			},
 		}, nil
@@ -177,6 +186,9 @@ func TestRunDoctor_AgentPosture(t *testing.T) {
 	}
 	if cline.Warning != "" || cline.EnforcementEvidence != "" || len(cline.Evidence) != 0 {
 		t.Fatalf("unverified agent should not carry warning/evidence: %+v", cline)
+	}
+	if !reflect.DeepEqual(cline.Autonomy, autonomy) {
+		t.Fatalf("unverified agent should retain autonomy: %+v", cline.Autonomy)
 	}
 }
 
@@ -305,6 +317,14 @@ func TestFormatDoctorTextShowsAgentPosture(t *testing.T) {
 			{
 				Name:        skills.AgentCodex,
 				Enforcement: skills.EnforcementEnforcing,
+				Autonomy: []skills.AutonomyCapability{
+					{
+						Mode:       "--full-auto",
+						Disables:   "edit and command approval prompts within the selected sandbox mode",
+						SourceKind: skills.AutonomySourceVendorDocs,
+						Source:     "OpenAI Codex CLI approval modes docs",
+					},
+				},
 				Evidence: []skills.EvidenceItem{
 					{Kind: skills.EvidenceUnfakeableOutput, Note: "sandbox denied write with a real tool error"},
 				},
@@ -329,6 +349,11 @@ func TestFormatDoctorTextShowsAgentPosture(t *testing.T) {
 		skills.AgentCodex,
 		string(skills.EnforcementEnforcing),
 		"sandbox denied write with a real tool error",
+		"Agent autonomy:",
+		"--full-auto",
+		"vendor_docs",
+		"edit and command approval prompts within the selected sandbox mode",
+		"OpenAI Codex CLI approval modes docs",
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("expected output to contain %q; got: %s", want, out)

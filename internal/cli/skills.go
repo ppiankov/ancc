@@ -58,11 +58,13 @@ func newSkillsCmd() *cobra.Command {
 }
 
 const (
-	skillsAgentWidth       = 14
-	skillsNumWidth         = 8
-	skillsEnforcementWidth = 10
-	skillsTokenWidth       = 10
-	skillsBudgetWidth      = 8
+	skillsAgentWidth        = 14
+	skillsNumWidth          = 8
+	skillsEnforcementWidth  = 10
+	skillsAutonomyModeWidth = 32
+	skillsSourceKindWidth   = 12
+	skillsTokenWidth        = 10
+	skillsBudgetWidth       = 8
 )
 
 func formatSkillsText(w io.Writer, result *skills.ScanResult, showTokens bool, budget int) {
@@ -113,6 +115,7 @@ func formatSkillsText(w io.Writer, result *skills.ScanResult, showTokens bool, b
 		}
 
 		writeSkillsPostureDetails(w, result.Agents)
+		writeSkillsAutonomyDetails(w, result.Agents)
 	}
 
 	if len(result.InvalidLocations) > 0 {
@@ -175,6 +178,30 @@ func writeSkillsPostureDetails(w io.Writer, agents []skills.AgentResult) {
 	}
 }
 
+// WO-90: keep autonomy as a separate output block from enforcement posture.
+func writeSkillsAutonomyDetails(w io.Writer, agents []skills.AgentResult) {
+	wroteHeader := false
+	for _, a := range agents {
+		if len(a.Autonomy) == 0 {
+			continue
+		}
+		if !wroteHeader {
+			_, _ = fmt.Fprintln(w)
+			_, _ = fmt.Fprintln(w, "  Autonomy:")
+			_, _ = fmt.Fprintf(w, "  %-*s %-*s %-*s %s\n",
+				skillsAgentWidth, "Agent",
+				skillsAutonomyModeWidth, "Mode",
+				skillsSourceKindWidth, "Source",
+				"Capability",
+			)
+			wroteHeader = true
+		}
+		for _, capability := range a.Autonomy {
+			writeAutonomyCapabilityBlock(w, a.Name, capability)
+		}
+	}
+}
+
 func writeAdvisoryWarningBlock(w io.Writer, name, warning string) {
 	displayName := agentDisplayName(name)
 	if warning == "" {
@@ -206,6 +233,19 @@ func writeEnforcingEvidenceBlock(w io.Writer, name, evidence string, items []ski
 	_, _ = fmt.Fprintf(w, "  %-*s %s\n",
 		skillsAgentWidth, name, strings.ToUpper(string(skills.EnforcementEnforcing)))
 	_, _ = fmt.Fprintf(w, "    evidence: %s\n", citation)
+}
+
+// WO-90: autonomy is documented capability, not enforcement evidence.
+func writeAutonomyCapabilityBlock(w io.Writer, name string, capability skills.AutonomyCapability) {
+	_, _ = fmt.Fprintf(w, "  %-*s %-*s %-*s %s\n",
+		skillsAgentWidth, name,
+		skillsAutonomyModeWidth, capability.Mode,
+		skillsSourceKindWidth, capability.SourceKind,
+		capability.Disables,
+	)
+	if capability.Source != "" {
+		_, _ = fmt.Fprintf(w, "    source: %s\n", capability.Source)
+	}
 }
 
 func enforcementEvidenceCitation(evidence string, items []skills.EvidenceItem) string {

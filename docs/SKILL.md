@@ -88,6 +88,14 @@ Scans for agent configurations in a directory. Detects 15 agents: Claude Code, C
       "mcp": 0,
       "tokens": 15496,
       "sources": ["~/.claude/settings.json", "~/.claude/skills/"],
+      "autonomy": [
+        {
+          "mode": "--dangerously-skip-permissions",
+          "disables": "permission prompts",
+          "source_kind": "vendor_docs",
+          "source": "Claude Code permission modes docs: https://code.claude.com/docs/en/permission-modes"
+        }
+      ],
       "enforcement": "unverified",
       "advisory": false,
       "budget_pct": 7.7
@@ -99,6 +107,14 @@ Scans for agent configurations in a directory. Detects 15 agents: Claude Code, C
       "mcp": 0,
       "tokens": 1200,
       "sources": ["~/.gemini/GEMINI.md"],
+      "autonomy": [
+        {
+          "mode": "--dangerously-skip-permissions",
+          "disables": "permission prompts",
+          "source_kind": "vendor_docs",
+          "source": "Google Antigravity CLI docs: https://antigravity.google/docs/cli-using"
+        }
+      ],
       "enforcement": "advisory",
       "evidence": [
         {
@@ -132,7 +148,7 @@ Scans for agent configurations in a directory. Detects 15 agents: Claude Code, C
 }
 ```
 
-Note: `budget_pct` field is only present when `--budget` is set. `enforcement` reports `enforcing`, `advisory`, or `unverified`; advisory text output includes the evidence standard without changing exit codes. `evidence.kind` values such as `real_tool_result` and `unfakeable_output` can support advisory/enforcing posture; `vendor_docs` and `agent_self_report` cannot. Antigravity skill directories must contain `SKILL.md`; candidates without that marker are reported in `invalid_locations` and are not counted as skills, sources, or tokens.
+Note: `budget_pct` field is only present when `--budget` is set. `enforcement` reports `enforcing`, `advisory`, or `unverified`; advisory text output includes the evidence standard without changing exit codes. `evidence.kind` values such as `real_tool_result` and `unfakeable_output` can support advisory/enforcing posture; `vendor_docs` and `agent_self_report` cannot. `autonomy` is separate from enforcement evidence and records documented prompt-disabling modes; `vendor_docs` is valid there only as evidence that the mode exists. Antigravity skill directories must contain `SKILL.md`; candidates without that marker are reported in `invalid_locations` and are not counted as skills, sources, or tokens.
 
 **Exit codes:**
 - 0: scan completed
@@ -239,6 +255,14 @@ Checks ancc's own health and reports companion tools.
     {
       "name": "antigravity",
       "enforcement": "advisory",
+      "autonomy": [
+        {
+          "mode": "--dangerously-skip-permissions",
+          "disables": "permission prompts",
+          "source_kind": "vendor_docs",
+          "source": "Google Antigravity CLI docs: https://antigravity.google/docs/cli-using"
+        }
+      ],
       "enforcement_evidence": "trustedWorkspaces does not confine reads to workspace; outside-workspace /tmp read returned a UUID-verified probe payload",
       "evidence": [
         {
@@ -260,7 +284,7 @@ Checks ancc's own health and reports companion tools.
 }
 ```
 
-Text output also shows each detected agent's posture. Advisory posture is informational, teaches the valid/invalid evidence standard, and does not make `doctor` fail.
+Text output also shows each detected agent's posture and documented autonomy modes. Advisory posture and autonomy capability are informational and do not make `doctor` fail.
 
 **Exit codes:**
 - 0: all healthy or warnings only
@@ -471,4 +495,4 @@ ancc doctor --format json | jq '.status'
 | goose | `~/.config/goose/config.yaml`, `~/.config/goose/skills/`, `.goosehints` | Yes |
 | antigravity | `~/.gemini/GEMINI.md`, `~/.gemini/antigravity-cli/skills/`, `~/.gemini/antigravity-cli/global_workflows/`, `~/.gemini/antigravity-cli/workflows/`, `AGENTS.md`, `.antigravitycli/skills/`, `.antigravitycli/workflows/` | Yes |
 
-Advisory agents are detected but not considered primary — their config paths are labeled accordingly in output. Use the `enforcement` field plus structured `evidence` for current posture; the legacy `advisory` field is retained for compatibility. Antigravity skill directories must contain `SKILL.md`; invalid candidates are reported separately instead of being counted.
+Advisory agents are detected but not considered primary — their config paths are labeled accordingly in output. Use the `enforcement` field plus structured `evidence` for current posture; the legacy `advisory` field is retained for compatibility. Use the separate `autonomy` field for documented prompt-disabling modes. The current documented set includes Claude Code `--dangerously-skip-permissions`, Cursor Agent Auto-run, Codex `--full-auto`, Aider `--yes-always`, Kilo `kilo run --auto`, and Antigravity `--dangerously-skip-permissions`. Antigravity skill directories must contain `SKILL.md`; invalid candidates are reported separately instead of being counted.

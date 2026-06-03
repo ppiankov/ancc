@@ -26,9 +26,22 @@ var antigravityEvidence = []EvidenceItem{
 	},
 }
 
+// WO-90: vendor docs can prove autonomy mode existence, not enforcement.
+func vendorAutonomy(mode, disables, source string) []AutonomyCapability {
+	return []AutonomyCapability{
+		{
+			Mode:       mode,
+			Disables:   disables,
+			SourceKind: AutonomySourceVendorDocs,
+			Source:     source,
+		},
+	}
+}
+
 // agentPathSpec defines the configuration for scanning an agent's files.
 type agentPathSpec struct {
 	Name        AgentName
+	Autonomy    []AutonomyCapability // WO-90: documented prompt-disabling modes
 	Enforcement Enforcement
 	Evidence    []EvidenceItem
 	Warning     string
@@ -157,6 +170,7 @@ func customDirProject(path, comment string) pathSpec {
 func scanAgentPaths(projectDir, homeDir string, spec agentPathSpec) AgentResult {
 	r := AgentResult{
 		Name:        spec.Name,
+		Autonomy:    append([]AutonomyCapability(nil), spec.Autonomy...),
 		Enforcement: spec.Enforcement,
 		Evidence:    append([]EvidenceItem(nil), spec.Evidence...),
 		Warning:     spec.Warning,
@@ -279,6 +293,7 @@ func scanAgentPaths(projectDir, homeDir string, spec agentPathSpec) AgentResult 
 	}
 
 	r.Tokens = bytesToTokens(totalBytes)
+	r.NormalizeAutonomy()
 	r.NormalizeEnforcement()
 	return r
 }
@@ -558,7 +573,12 @@ func parseMCPServers(path string, r *AgentResult) (found bool, size int64) {
 
 func scanClaudeCode(projectDir, homeDir string) AgentResult {
 	spec := agentPathSpec{
-		Name:      AgentClaudeCode,
+		Name: AgentClaudeCode,
+		Autonomy: vendorAutonomy(
+			"--dangerously-skip-permissions",
+			"permission prompts",
+			"Claude Code permission modes docs: https://code.claude.com/docs/en/permission-modes",
+		),
 		ConfigDir: ".claude",
 		Home: []pathSpec{
 			configFileHome(".claude/settings.json", "", parseClaudeSettings),
@@ -591,7 +611,12 @@ func scanCline(projectDir, homeDir string) AgentResult {
 
 func scanCursor(projectDir, homeDir string) AgentResult {
 	spec := agentPathSpec{
-		Name:      AgentCursor,
+		Name: AgentCursor,
+		Autonomy: vendorAutonomy(
+			"Agent Auto-run",
+			"tool approval prompts for auto-run surfaces",
+			"Cursor Agent modes docs: https://docs.cursor.com/agent",
+		),
 		ConfigDir: ".cursor",
 		Home: []pathSpec{
 			configFileHome(".cursor/mcp.json", "", parseMCPServers),
@@ -621,7 +646,12 @@ func scanOpenCode(projectDir, homeDir string) AgentResult {
 
 func scanCodex(projectDir, homeDir string) AgentResult {
 	spec := agentPathSpec{
-		Name:      AgentCodex,
+		Name: AgentCodex,
+		Autonomy: vendorAutonomy(
+			"--full-auto",
+			"edit and command approval prompts within the selected sandbox mode",
+			"OpenAI Codex CLI approval modes docs: https://help.openai.com/en/articles/11096431",
+		),
 		ConfigDir: ".codex",
 		Home: []pathSpec{
 			fileHome(".codex/AGENTS.md", "(advisory)"),
@@ -679,7 +709,12 @@ func scanWindsurf(projectDir, homeDir string) AgentResult {
 
 func scanAider(projectDir, homeDir string) AgentResult {
 	spec := agentPathSpec{
-		Name:      AgentAider,
+		Name: AgentAider,
+		Autonomy: vendorAutonomy(
+			"--yes-always",
+			"confirmation prompts",
+			"Aider options reference: https://aider.chat/docs/config/options.html",
+		),
 		ConfigDir: ".aider",
 		Home: []pathSpec{
 			fileHome(".aider.conf.yml", "(advisory)"),
@@ -725,7 +760,12 @@ func scanCopilot(projectDir, homeDir string) AgentResult {
 
 func scanKilocode(projectDir, homeDir string) AgentResult {
 	spec := agentPathSpec{
-		Name:      AgentKilocode,
+		Name: AgentKilocode,
+		Autonomy: vendorAutonomy(
+			"kilo run --auto",
+			"user interaction prompts in autonomous mode",
+			"Kilo CLI autonomous mode docs: https://kilo.ai/docs/code-with-ai/platforms/cli",
+		),
 		ConfigDir: ".kilocode",
 		Home: []pathSpec{
 			skillDirHome(".kilocode/skills", ""),
@@ -775,7 +815,12 @@ func scanAntigravity(projectDir, homeDir string) AgentResult {
 	const antigravitySkillFile = "SKILL.md"
 
 	spec := agentPathSpec{
-		Name:        AgentAntigravity,
+		Name: AgentAntigravity,
+		Autonomy: vendorAutonomy(
+			"--dangerously-skip-permissions",
+			"permission prompts",
+			"Google Antigravity CLI docs: https://antigravity.google/docs/cli-using",
+		),
 		Enforcement: EnforcementAdvisory,
 		Evidence:    antigravityEvidence,
 		Warning:     SecurityProbeSelfReportWarning,

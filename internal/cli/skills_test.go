@@ -145,6 +145,19 @@ func TestFormatSkillsTextShowsEnforcementPosture(t *testing.T) {
 				Sources:     []string{".clinerules/"},
 			},
 			{
+				Name:        skills.AgentAider,
+				Enforcement: skills.EnforcementUnverified,
+				Autonomy: []skills.AutonomyCapability{
+					{
+						Mode:       "--yes-always",
+						Disables:   "confirmation prompts",
+						SourceKind: skills.AutonomySourceVendorDocs,
+						Source:     "Aider options reference",
+					},
+				},
+				Sources: []string{".aider.conf.yml"},
+			},
+			{
 				Name:        skills.AgentCodex,
 				Enforcement: skills.EnforcementEnforcing,
 				Evidence: []skills.EvidenceItem{
@@ -167,8 +180,16 @@ func TestFormatSkillsTextShowsEnforcementPosture(t *testing.T) {
 		"agent self-reports as proof of access or enforcement",
 		"valid:   real OS result, real tool error, unfakeable payload",
 		"invalid: vendor docs, agent says \"YES\", model explanation",
+		"Autonomy:",
+		"Mode",
+		"Source",
+		"--yes-always",
+		"vendor_docs",
+		"confirmation prompts",
+		"Aider options reference",
 		skills.AgentCline,
 		string(skills.EnforcementUnverified),
+		skills.AgentAider,
 		skills.AgentCodex,
 		string(skills.EnforcementEnforcing),
 		"policy blocked a real write attempt",
@@ -189,6 +210,14 @@ func TestFormatSkillsJSONOmitsPlainUnverifiedDetails(t *testing.T) {
 		Name:        skills.AgentCodex,
 		Enforcement: skills.EnforcementAdvisory,
 		Warning:     skills.SecurityProbeSelfReportWarning,
+		Autonomy: []skills.AutonomyCapability{
+			{
+				Mode:       "--full-auto",
+				Disables:   "edit and command approval prompts within the selected sandbox mode",
+				SourceKind: skills.AutonomySourceVendorDocs,
+				Source:     "OpenAI Codex CLI approval modes docs",
+			},
+		},
 		Evidence: []skills.EvidenceItem{
 			{Kind: skills.EvidenceVendorDocs, Note: "vendor docs claim secure mode"},
 			{Kind: skills.EvidenceAgentSelfReport, Note: "agent said YES"},
@@ -208,10 +237,11 @@ func TestFormatSkillsJSONOmitsPlainUnverifiedDetails(t *testing.T) {
 
 	var raw struct {
 		Agents []struct {
-			Name        string             `json:"name"`
-			Enforcement skills.Enforcement `json:"enforcement"`
-			Evidence    json.RawMessage    `json:"evidence"`
-			Warning     string             `json:"warning"`
+			Name        string                      `json:"name"`
+			Enforcement skills.Enforcement          `json:"enforcement"`
+			Autonomy    []skills.AutonomyCapability `json:"autonomy"`
+			Evidence    json.RawMessage             `json:"evidence"`
+			Warning     string                      `json:"warning"`
 		} `json:"agents"`
 	}
 	if err := json.Unmarshal(buf.Bytes(), &raw); err != nil {
@@ -226,6 +256,9 @@ func TestFormatSkillsJSONOmitsPlainUnverifiedDetails(t *testing.T) {
 	if len(raw.Agents[0].Evidence) != 0 || raw.Agents[0].Warning != "" {
 		t.Fatalf("plain unverified JSON should omit evidence/warning, got raw=%s warning=%q",
 			raw.Agents[0].Evidence, raw.Agents[0].Warning)
+	}
+	if len(raw.Agents[0].Autonomy) != 1 || raw.Agents[0].Autonomy[0].Mode != "--full-auto" {
+		t.Fatalf("unverified JSON should retain autonomy, got %+v", raw.Agents[0].Autonomy)
 	}
 }
 

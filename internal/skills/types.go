@@ -69,6 +69,14 @@ const (
 	EvidenceUnfakeableOutput EvidenceKind = "unfakeable_output"
 )
 
+// AutonomySourceKind identifies where an autonomy capability was documented.
+// WO-90: autonomy source facts are separate from security-probe evidence.
+type AutonomySourceKind string
+
+const (
+	AutonomySourceVendorDocs AutonomySourceKind = "vendor_docs"
+)
+
 // SecurityProbeSelfReportWarning is shown when posture evidence includes rejected self-report probes.
 const SecurityProbeSelfReportWarning = "agent self-reports are not valid evidence for security probes"
 
@@ -126,24 +134,51 @@ type EvidenceItem struct {
 	Note string       `json:"note" yaml:"note"` // WO-77: concise cited probe note
 }
 
+// AutonomyCapability records a documented mode that can reduce user prompts.
+// WO-90: autonomy is a capability fact, not enforcement evidence.
+type AutonomyCapability struct {
+	Mode       string             `json:"mode" yaml:"mode"`               // WO-90: documented flag or product mode
+	Disables   string             `json:"disables" yaml:"disables"`       // WO-90: interaction the mode can bypass
+	SourceKind AutonomySourceKind `json:"source_kind" yaml:"source_kind"` // WO-90: documentation source class
+	Source     string             `json:"source" yaml:"source"`           // WO-90: concise citation for the documented capability
+}
+
 // AgentResult holds the scan result for a single agent.
 type AgentResult struct {
-	Name                string             `json:"name"`
-	ConfigDir           string             `json:"config_dir"`
-	Skills              int                `json:"skills"`
-	SkillFiles          []SkillFile        `json:"skill_files,omitempty"`
-	Hooks               int                `json:"hooks"`
-	HookConfigs         []HookConfig       `json:"hook_configs,omitempty"`
-	MCP                 int                `json:"mcp"`
-	MCPServers          []MCPServer        `json:"mcp_servers,omitempty"`
-	Tokens              int64              `json:"tokens"`
-	Sources             []string           `json:"sources"`
-	InvalidLocations    []InvalidLocation  `json:"-" yaml:"-"`                     // WO-72: aggregate into ScanResult without emitting invalid-only agents
-	Enforcement         EnforcementPosture `json:"enforcement"`                    // WO-77: evidence-backed enforcement posture
-	Evidence            []EvidenceItem     `json:"evidence,omitempty"`             // WO-77: structured posture evidence
-	Warning             string             `json:"warning,omitempty"`              // WO-77: evidence-quality caveat for advisory agents
-	EnforcementEvidence string             `json:"enforcement_evidence,omitempty"` // WO-77: legacy evidence summary
-	Advisory            bool               `json:"advisory"`                       // WO-77: deprecated alias for Enforcement==advisory
+	Name                string               `json:"name"`
+	ConfigDir           string               `json:"config_dir"`
+	Skills              int                  `json:"skills"`
+	SkillFiles          []SkillFile          `json:"skill_files,omitempty"`
+	Hooks               int                  `json:"hooks"`
+	HookConfigs         []HookConfig         `json:"hook_configs,omitempty"`
+	MCP                 int                  `json:"mcp"`
+	MCPServers          []MCPServer          `json:"mcp_servers,omitempty"`
+	Tokens              int64                `json:"tokens"`
+	Sources             []string             `json:"sources"`
+	InvalidLocations    []InvalidLocation    `json:"-" yaml:"-"`                     // WO-72: aggregate into ScanResult without emitting invalid-only agents
+	Autonomy            []AutonomyCapability `json:"autonomy,omitempty"`             // WO-90: documented prompt-disabling capability
+	Enforcement         EnforcementPosture   `json:"enforcement"`                    // WO-77: evidence-backed enforcement posture
+	Evidence            []EvidenceItem       `json:"evidence,omitempty"`             // WO-77: structured posture evidence
+	Warning             string               `json:"warning,omitempty"`              // WO-77: evidence-quality caveat for advisory agents
+	EnforcementEvidence string               `json:"enforcement_evidence,omitempty"` // WO-77: legacy evidence summary
+	Advisory            bool                 `json:"advisory"`                       // WO-77: deprecated alias for Enforcement==advisory
+}
+
+// NormalizeAutonomy trims autonomy capability facts without changing enforcement state.
+// WO-90: unverified enforcement still keeps autonomy facts.
+func (r *AgentResult) NormalizeAutonomy() {
+	normalized := r.Autonomy[:0]
+	for _, capability := range r.Autonomy {
+		capability.Mode = strings.TrimSpace(capability.Mode)
+		capability.Disables = strings.TrimSpace(capability.Disables)
+		capability.SourceKind = AutonomySourceKind(strings.TrimSpace(string(capability.SourceKind)))
+		capability.Source = strings.TrimSpace(capability.Source)
+		if capability.Mode == "" || capability.Disables == "" {
+			continue
+		}
+		normalized = append(normalized, capability)
+	}
+	r.Autonomy = normalized
 }
 
 // NormalizeEnforcement applies the evidence requirement and legacy alias.
