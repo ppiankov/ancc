@@ -612,10 +612,11 @@ func scanCline(projectDir, homeDir string) AgentResult {
 func scanCursor(projectDir, homeDir string) AgentResult {
 	spec := agentPathSpec{
 		Name: AgentCursor,
+		// WO-92: Cursor citation must stay on a specific auto-run source.
 		Autonomy: vendorAutonomy(
 			"Agent Auto-run",
 			"tool approval prompts for auto-run surfaces",
-			"Cursor Agent modes docs: https://docs.cursor.com/agent",
+			"Cursor Agent overview docs (Terminal Integration): https://cursor.com/docs/agent/overview#terminal-integration; mentions configurable auto-run or confirmation",
 		),
 		ConfigDir: ".cursor",
 		Home: []pathSpec{

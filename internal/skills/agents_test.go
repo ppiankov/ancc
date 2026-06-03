@@ -310,6 +310,10 @@ func TestAllAgents(t *testing.T) {
 		"Kilocode":    "kilo run --auto",
 		"Antigravity": "--dangerously-skip-permissions",
 	}
+	// WO-92: prevent generic Cursor docs citations from satisfying autonomy coverage.
+	expectedAutonomySources := map[string]string{
+		"Cursor": "Cursor Agent overview docs (Terminal Integration): https://cursor.com/docs/agent/overview#terminal-integration; mentions configurable auto-run or confirmation",
+	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			result := tc.fn(projectDir, homeDir)
@@ -344,6 +348,10 @@ func TestAllAgents(t *testing.T) {
 				if result.Autonomy[0].SourceKind != AutonomySourceVendorDocs {
 					t.Errorf("Expected autonomy source kind %q, got %q",
 						AutonomySourceVendorDocs, result.Autonomy[0].SourceKind)
+				}
+				if expectedSource, ok := expectedAutonomySources[tc.name]; ok &&
+					result.Autonomy[0].Source != expectedSource {
+					t.Errorf("Expected autonomy source %q, got %q", expectedSource, result.Autonomy[0].Source)
 				}
 			} else if len(result.Autonomy) != 0 {
 				t.Errorf("Expected no autonomy capability for %s, got %+v", tc.name, result.Autonomy)

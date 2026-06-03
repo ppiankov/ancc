@@ -48,7 +48,6 @@ Validates a CLI tool's repo against the ANCC convention. Checks SKILL.md structu
 ```
 
 Note: `badge_url` field is only present when `--badge` is set.
-```
 
 **Exit codes:**
 - 0: all checks pass
