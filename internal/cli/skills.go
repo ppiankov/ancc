@@ -115,6 +115,7 @@ func formatSkillsText(w io.Writer, result *skills.ScanResult, showTokens bool, b
 		}
 
 		writeSkillsPostureDetails(w, result.Agents)
+		writeSkillsCompoundCautionDetails(w, result.Agents)
 		writeSkillsAutonomyDetails(w, result.Agents)
 	}
 
@@ -175,6 +176,23 @@ func writeSkillsPostureDetails(w io.Writer, agents []skills.AgentResult) {
 			wroteHeader = true
 		}
 		writeEnforcingEvidenceBlock(w, a.Name, a.EnforcementEvidence, a.Evidence)
+	}
+}
+
+// WO-93: compound caution is a synthesis on top of posture and autonomy blocks.
+func writeSkillsCompoundCautionDetails(w io.Writer, agents []skills.AgentResult) {
+	wroteHeader := false
+	for _, a := range agents {
+		caution := a.CompoundRiskCaution()
+		if caution == nil {
+			continue
+		}
+		if !wroteHeader {
+			_, _ = fmt.Fprintln(w)
+			_, _ = fmt.Fprintln(w, "  Compound cautions:")
+			wroteHeader = true
+		}
+		writeCompoundCautionBlock(w, a.Name, caution)
 	}
 }
 
@@ -246,6 +264,13 @@ func writeAutonomyCapabilityBlock(w io.Writer, name string, capability skills.Au
 	if capability.Source != "" {
 		_, _ = fmt.Fprintf(w, "    source: %s\n", capability.Source)
 	}
+}
+
+func writeCompoundCautionBlock(w io.Writer, name string, caution *skills.CompoundCaution) {
+	if caution == nil || caution.Message == "" {
+		return
+	}
+	_, _ = fmt.Fprintf(w, "  %-*s %s\n", skillsAgentWidth, name, caution.Message)
 }
 
 func enforcementEvidenceCitation(evidence string, items []skills.EvidenceItem) string {

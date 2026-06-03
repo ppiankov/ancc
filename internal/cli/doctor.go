@@ -35,7 +35,8 @@ type DoctorResult struct {
 type DoctorAgentPosture struct {
 	Name                string                      `json:"name"`
 	Enforcement         skills.Enforcement          `json:"enforcement"`
-	Autonomy            []skills.AutonomyCapability `json:"autonomy,omitempty"` // WO-90: documented prompt-disabling capability
+	Autonomy            []skills.AutonomyCapability `json:"autonomy,omitempty"`         // WO-90: documented prompt-disabling capability
+	CompoundCaution     *skills.CompoundCaution     `json:"compound_caution,omitempty"` // WO-93: high-autonomy plus weak-enforcement synthesis
 	EnforcementEvidence string                      `json:"enforcement_evidence,omitempty"`
 	Evidence            []skills.EvidenceItem       `json:"evidence,omitempty"` // WO-77: structured evidence items
 	Warning             string                      `json:"warning,omitempty"`  // WO-78: advisory evidence-quality warning
@@ -165,6 +166,7 @@ func checkAgentPosture(env *doctorEnv) []DoctorAgentPosture {
 			Name:                a.Name,
 			Enforcement:         agentEnforcement(a),
 			Autonomy:            a.Autonomy,
+			CompoundCaution:     a.CompoundRiskCaution(),
 			EnforcementEvidence: a.EnforcementEvidence,
 			Evidence:            a.Evidence,
 			Warning:             a.Warning,
@@ -316,11 +318,36 @@ func formatDoctorText(w io.Writer, result *DoctorResult) {
 			}
 		}
 
+		writeDoctorCompoundCautionDetails(w, result.Agents)
 		writeDoctorAutonomyDetails(w, result.Agents)
 	}
 
 	_, _ = fmt.Fprintln(w)
 	_, _ = fmt.Fprintf(w, "  Result: %s\n", strings.ToUpper(result.Status))
+}
+
+// WO-93: doctor mirrors compound risk without changing health status.
+func writeDoctorCompoundCautionDetails(w io.Writer, agents []DoctorAgentPosture) {
+	wroteHeader := false
+	for _, a := range agents {
+		caution := a.CompoundCaution
+		if caution == nil {
+			caution = skills.AgentResult{
+				Name:        a.Name,
+				Autonomy:    a.Autonomy,
+				Enforcement: skills.EnforcementPosture(a.Enforcement),
+			}.CompoundRiskCaution()
+		}
+		if caution == nil {
+			continue
+		}
+		if !wroteHeader {
+			_, _ = fmt.Fprintln(w)
+			_, _ = fmt.Fprintln(w, "  Compound cautions:")
+			wroteHeader = true
+		}
+		writeCompoundCautionBlock(w, a.Name, caution)
+	}
 }
 
 // WO-90: doctor mirrors autonomy capabilities without affecting health status.

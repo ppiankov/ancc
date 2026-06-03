@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"sort"
+	"strings"
 	"testing"
 )
 
@@ -445,6 +446,105 @@ func TestNormalizeEnforcementRequiresEvidence(t *testing.T) {
 	}
 	if result.Warning != SecurityProbeSelfReportWarning || !result.Advisory || len(result.Evidence) != 1 {
 		t.Errorf("Expected valid advisory evidence and warning to remain, got %+v", result)
+	}
+}
+
+// WO-93: compound caution fires only for high-autonomy plus weak enforcement.
+func TestNormalizeCompoundCaution(t *testing.T) {
+	autonomy := []AutonomyCapability{
+		{
+			Mode:       "--full-auto",
+			Disables:   "approval prompts",
+			SourceKind: AutonomySourceVendorDocs,
+			Source:     "vendor docs",
+		},
+	}
+	validEvidence := []EvidenceItem{
+		{Kind: EvidenceRealToolResult, Note: "real probe result"},
+	}
+	tests := []struct {
+		name          string
+		result        AgentResult
+		wantCaution   bool
+		wantEnforce   EnforcementPosture
+		wantMode      string
+		wantInMessage []string
+	}{
+		{
+			name: "fires for advisory autonomy",
+			result: AgentResult{
+				Autonomy:    autonomy,
+				Enforcement: EnforcementAdvisory,
+				Evidence:    validEvidence,
+			},
+			wantCaution: true,
+			wantEnforce: EnforcementAdvisory,
+			wantMode:    "--full-auto",
+			wantInMessage: []string{
+				"acts without prompting",
+				"mode: --full-auto",
+				"enforcement: advisory",
+			},
+		},
+		{
+			name: "fires for unverified autonomy",
+			result: AgentResult{
+				Autonomy:    autonomy,
+				Enforcement: EnforcementUnverified,
+			},
+			wantCaution: true,
+			wantEnforce: EnforcementUnverified,
+			wantMode:    "--full-auto",
+			wantInMessage: []string{
+				"acts without prompting",
+				"mode: --full-auto",
+				"enforcement: unverified",
+			},
+		},
+		{
+			name: "silent for enforcing autonomy",
+			result: AgentResult{
+				Autonomy:    autonomy,
+				Enforcement: EnforcementEnforcing,
+				Evidence:    validEvidence,
+			},
+		},
+		{
+			name: "silent for empty autonomy",
+			result: AgentResult{
+				Enforcement: EnforcementAdvisory,
+				Evidence:    validEvidence,
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := tt.result
+			result.NormalizeAutonomy()
+			result.NormalizeEnforcement()
+			result.NormalizeCompoundCaution()
+			if !tt.wantCaution {
+				if result.CompoundCaution != nil {
+					t.Fatalf("Expected no compound caution, got %+v", result.CompoundCaution)
+				}
+				return
+			}
+			if result.CompoundCaution == nil {
+				t.Fatal("Expected compound caution")
+			}
+			if result.CompoundCaution.Mode != tt.wantMode {
+				t.Errorf("Expected mode %q, got %q", tt.wantMode, result.CompoundCaution.Mode)
+			}
+			if result.CompoundCaution.Enforcement != tt.wantEnforce {
+				t.Errorf("Expected enforcement %q, got %q", tt.wantEnforce, result.CompoundCaution.Enforcement)
+			}
+			for _, want := range tt.wantInMessage {
+				if !strings.Contains(result.CompoundCaution.Message, want) {
+					t.Errorf("Expected message to contain %q, got %q", want, result.CompoundCaution.Message)
+				}
+			}
+		})
 	}
 }
 

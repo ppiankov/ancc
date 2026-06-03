@@ -143,6 +143,13 @@ type AutonomyCapability struct {
 	Source     string             `json:"source" yaml:"source"`           // WO-90: concise citation for the documented capability
 }
 
+// CompoundCaution records the high-autonomy plus weak-enforcement synthesis.
+type CompoundCaution struct {
+	Mode        string             `json:"mode" yaml:"mode"`               // WO-93: autonomy mode that triggered the compound caution
+	Enforcement EnforcementPosture `json:"enforcement" yaml:"enforcement"` // WO-93: weak enforcement state paired with autonomy
+	Message     string             `json:"message" yaml:"message"`         // WO-93: user-facing factual caution
+}
+
 // AgentResult holds the scan result for a single agent.
 type AgentResult struct {
 	Name                string               `json:"name"`
@@ -157,6 +164,7 @@ type AgentResult struct {
 	Sources             []string             `json:"sources"`
 	InvalidLocations    []InvalidLocation    `json:"-" yaml:"-"`                     // WO-72: aggregate into ScanResult without emitting invalid-only agents
 	Autonomy            []AutonomyCapability `json:"autonomy,omitempty"`             // WO-90: documented prompt-disabling capability
+	CompoundCaution     *CompoundCaution     `json:"compound_caution,omitempty"`     // WO-93: high-autonomy plus weak-enforcement synthesis
 	Enforcement         EnforcementPosture   `json:"enforcement"`                    // WO-77: evidence-backed enforcement posture
 	Evidence            []EvidenceItem       `json:"evidence,omitempty"`             // WO-77: structured posture evidence
 	Warning             string               `json:"warning,omitempty"`              // WO-77: evidence-quality caveat for advisory agents
@@ -212,6 +220,43 @@ func (r *AgentResult) NormalizeEnforcement() {
 		r.EnforcementEvidence = ""
 	}
 	r.Advisory = r.Enforcement == EnforcementAdvisory
+}
+
+// NormalizeCompoundCaution derives the compound caution after autonomy and enforcement normalize.
+func (r *AgentResult) NormalizeCompoundCaution() {
+	r.CompoundCaution = r.CompoundRiskCaution()
+}
+
+// CompoundRiskCaution returns the informational high-autonomy plus weak-enforcement caution.
+func (r AgentResult) CompoundRiskCaution() *CompoundCaution {
+	enforcement := r.Enforcement
+	switch enforcement {
+	case "", EnforcementUnverified:
+		enforcement = EnforcementUnverified
+	case EnforcementAdvisory:
+	case EnforcementEnforcing:
+		return nil
+	default:
+		enforcement = EnforcementUnverified
+	}
+
+	for _, capability := range r.Autonomy {
+		mode := strings.TrimSpace(capability.Mode)
+		if mode == "" {
+			continue
+		}
+		return &CompoundCaution{
+			Mode:        mode,
+			Enforcement: enforcement,
+			Message:     compoundCautionMessage(mode, enforcement),
+		}
+	}
+	return nil
+}
+
+func compoundCautionMessage(mode string, enforcement EnforcementPosture) string {
+	return "acts without prompting (mode: " + mode + ") and has no verified structural block (enforcement: " +
+		string(enforcement) + "); verify before trusting near sensitive paths."
 }
 
 func hasValidEnforcementEvidence(evidence []EvidenceItem) bool {

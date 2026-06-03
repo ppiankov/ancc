@@ -190,6 +190,13 @@ func TestRunDoctor_AgentPosture(t *testing.T) {
 	if !reflect.DeepEqual(cline.Autonomy, autonomy) {
 		t.Fatalf("unverified agent should retain autonomy: %+v", cline.Autonomy)
 	}
+	if cline.CompoundCaution == nil {
+		t.Fatal("unverified high-autonomy doctor posture should include compound caution")
+	}
+	if cline.CompoundCaution.Mode != "--full-auto" ||
+		cline.CompoundCaution.Enforcement != skills.EnforcementUnverified {
+		t.Fatalf("unexpected compound caution: %+v", cline.CompoundCaution)
+	}
 }
 
 func TestCheckGitHubAPI_ContextCancelled(t *testing.T) {
@@ -315,6 +322,18 @@ func TestFormatDoctorTextShowsAgentPosture(t *testing.T) {
 				Enforcement: skills.EnforcementUnverified,
 			},
 			{
+				Name:        skills.AgentAider,
+				Enforcement: skills.EnforcementUnverified,
+				Autonomy: []skills.AutonomyCapability{
+					{
+						Mode:       "--yes-always",
+						Disables:   "confirmation prompts",
+						SourceKind: skills.AutonomySourceVendorDocs,
+						Source:     "Aider options reference",
+					},
+				},
+			},
+			{
 				Name:        skills.AgentCodex,
 				Enforcement: skills.EnforcementEnforcing,
 				Autonomy: []skills.AutonomyCapability{
@@ -346,6 +365,11 @@ func TestFormatDoctorTextShowsAgentPosture(t *testing.T) {
 		"invalid: vendor docs, agent says \"YES\", model explanation",
 		skills.AgentCline,
 		string(skills.EnforcementUnverified),
+		"Compound cautions:",
+		skills.AgentAider,
+		"acts without prompting (mode: --yes-always)",
+		"enforcement: unverified",
+		"verify before trusting near sensitive paths",
 		skills.AgentCodex,
 		string(skills.EnforcementEnforcing),
 		"sandbox denied write with a real tool error",
@@ -363,6 +387,59 @@ func TestFormatDoctorTextShowsAgentPosture(t *testing.T) {
 		if strings.Contains(line, skills.AgentCline) && strings.Contains(line, "warning") {
 			t.Errorf("unverified cline line should not include warning: %q", line)
 		}
+	}
+}
+
+func TestFormatDoctorJSONIncludesCompoundCaution(t *testing.T) {
+	caution := (&skills.AgentResult{
+		Name:        skills.AgentAider,
+		Enforcement: skills.EnforcementUnverified,
+		Autonomy: []skills.AutonomyCapability{
+			{
+				Mode:       "--yes-always",
+				Disables:   "confirmation prompts",
+				SourceKind: skills.AutonomySourceVendorDocs,
+				Source:     "Aider options reference",
+			},
+		},
+	}).CompoundRiskCaution()
+	result := &DoctorResult{
+		Status: doctorOK,
+		Checks: []DoctorCheck{
+			{Name: "ancc-version", Status: doctorOK, Message: "dev"},
+		},
+		Agents: []DoctorAgentPosture{
+			{
+				Name:            skills.AgentAider,
+				Enforcement:     skills.EnforcementUnverified,
+				CompoundCaution: caution,
+			},
+		},
+	}
+
+	buf := new(bytes.Buffer)
+	if err := formatDoctorJSON(buf, result); err != nil {
+		t.Fatalf("formatDoctorJSON returned error: %v", err)
+	}
+
+	var raw struct {
+		Agents []struct {
+			Name    string                  `json:"name"`
+			Caution *skills.CompoundCaution `json:"compound_caution"`
+		} `json:"agents"`
+	}
+	if err := json.Unmarshal(buf.Bytes(), &raw); err != nil {
+		t.Fatalf("invalid JSON: %v\nraw: %s", err, buf.String())
+	}
+	if len(raw.Agents) != 1 {
+		t.Fatalf("agents = %d, want 1", len(raw.Agents))
+	}
+	if raw.Agents[0].Caution == nil {
+		t.Fatalf("compound_caution missing from JSON: %s", buf.String())
+	}
+	if raw.Agents[0].Caution.Mode != "--yes-always" ||
+		raw.Agents[0].Caution.Enforcement != skills.EnforcementUnverified {
+		t.Fatalf("unexpected compound_caution: %+v", raw.Agents[0].Caution)
 	}
 }
 

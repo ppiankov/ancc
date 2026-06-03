@@ -295,6 +295,7 @@ func scanAgentPaths(projectDir, homeDir string, spec agentPathSpec) AgentResult 
 	r.Tokens = bytesToTokens(totalBytes)
 	r.NormalizeAutonomy()
 	r.NormalizeEnforcement()
+	r.NormalizeCompoundCaution()
 	return r
 }
 

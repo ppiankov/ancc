@@ -180,6 +180,10 @@ func TestFormatSkillsTextShowsEnforcementPosture(t *testing.T) {
 		"agent self-reports as proof of access or enforcement",
 		"valid:   real OS result, real tool error, unfakeable payload",
 		"invalid: vendor docs, agent says \"YES\", model explanation",
+		"Compound cautions:",
+		"acts without prompting (mode: --yes-always)",
+		"enforcement: unverified",
+		"verify before trusting near sensitive paths",
 		"Autonomy:",
 		"Mode",
 		"Source",
@@ -224,6 +228,7 @@ func TestFormatSkillsJSONOmitsPlainUnverifiedDetails(t *testing.T) {
 		},
 	}
 	agent.NormalizeEnforcement()
+	agent.NormalizeCompoundCaution()
 
 	result := &skills.ScanResult{
 		Path:   "/tmp/project",
@@ -240,6 +245,7 @@ func TestFormatSkillsJSONOmitsPlainUnverifiedDetails(t *testing.T) {
 			Name        string                      `json:"name"`
 			Enforcement skills.Enforcement          `json:"enforcement"`
 			Autonomy    []skills.AutonomyCapability `json:"autonomy"`
+			Caution     *skills.CompoundCaution     `json:"compound_caution"`
 			Evidence    json.RawMessage             `json:"evidence"`
 			Warning     string                      `json:"warning"`
 		} `json:"agents"`
@@ -259,6 +265,13 @@ func TestFormatSkillsJSONOmitsPlainUnverifiedDetails(t *testing.T) {
 	}
 	if len(raw.Agents[0].Autonomy) != 1 || raw.Agents[0].Autonomy[0].Mode != "--full-auto" {
 		t.Fatalf("unverified JSON should retain autonomy, got %+v", raw.Agents[0].Autonomy)
+	}
+	if raw.Agents[0].Caution == nil {
+		t.Fatal("unverified high-autonomy JSON should include compound_caution")
+	}
+	if raw.Agents[0].Caution.Mode != "--full-auto" ||
+		raw.Agents[0].Caution.Enforcement != skills.EnforcementUnverified {
+		t.Fatalf("unexpected compound_caution: %+v", raw.Agents[0].Caution)
 	}
 }
 
